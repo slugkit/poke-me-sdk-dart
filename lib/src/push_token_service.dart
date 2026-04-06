@@ -1,0 +1,67 @@
+import 'apns_token_service.dart';
+
+/// The type of push token obtained from the platform.
+enum PushTokenType {
+  /// Apple Push Notification service token (iOS, macOS).
+  apns,
+
+  /// Firebase Cloud Messaging token (Android).
+  fcm,
+}
+
+/// Result of a push token retrieval attempt.
+class PushTokenResult {
+  PushTokenResult({required this.type, required this.token});
+
+  final PushTokenType type;
+  final String token;
+
+  @override
+  String toString() => '${type.name.toUpperCase()} token: $token';
+}
+
+/// Platform-agnostic interface for push token retrieval.
+///
+/// Use the factory constructor to get the correct implementation:
+///
+/// ```dart
+/// final service = PushTokenService();
+/// final result = await service.getToken();
+/// print('${result.type}: ${result.token}');
+/// ```
+abstract class PushTokenService {
+  /// Creates the appropriate platform implementation.
+  ///
+  /// All platforms use the same [ApnsTokenService] which communicates
+  /// via MethodChannel to platform-specific native code:
+  /// - iOS/macOS: APNs token retrieval (Swift)
+  /// - Android: FCM token retrieval (Kotlin)
+  factory PushTokenService() => ApnsTokenService();
+
+  /// Requests notification permissions and retrieves the push token.
+  ///
+  /// Throws [PushTokenException] if permissions are denied or the
+  /// token cannot be obtained.
+  Future<PushTokenResult> getToken();
+
+  /// Stream of token updates. Emits a new result whenever the platform
+  /// rotates the push token.
+  Stream<PushTokenResult> get onTokenRefresh;
+
+  /// Opens the OS notification settings for this app.
+  Future<void> openSettings();
+}
+
+/// Thrown when push token retrieval fails.
+class PushTokenException implements Exception {
+  PushTokenException(this.message, {this.code});
+
+  final String message;
+  final String? code;
+
+  bool get isPermissionDenied =>
+      code == 'PERMISSION_DENIED' || code == 'PERMISSION_NOT_DETERMINED';
+
+  @override
+  String toString() => 'PushTokenException: $message';
+}
