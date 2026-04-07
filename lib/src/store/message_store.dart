@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../models/channel.dart';
@@ -6,6 +8,7 @@ import '../storage/channels_dao.dart';
 import '../storage/database.dart';
 import '../storage/messages_dao.dart';
 import '../storage/sync_state_dao.dart';
+import 'channel_state_change.dart';
 
 /// Outcome of [MessageStore.receiveMessage].
 enum MessageReceiveResult {
@@ -57,11 +60,23 @@ class MessageStore {
   MessageStore._(this._db);
 
   final PokemeDatabase _db;
+  final StreamController<ChannelStateChange> _channelChanges =
+      StreamController<ChannelStateChange>.broadcast();
 
   /// How long an acknowledged tombstone lingers before the sweep removes
   /// the channel row. The user has this long to revisit the notice before
   /// the channel disappears entirely.
   static const tombstoneTtl = Duration(days: 1);
+
+  /// Broadcast stream of channel state changes.
+  ///
+  /// Fires after each channel mutation commits successfully. Use this from
+  /// app-level features that key data on channel slug (e.g. user-defined
+  /// folders) to keep their indices in sync without polling.
+  ///
+  /// Multiple listeners are supported. Late subscribers do not receive
+  /// historical events — the stream is broadcast, not replay-cached.
+  Stream<ChannelStateChange> get channelChanges => _channelChanges.stream;
 
   /// Opens the store at [path]. See [PokemeDatabase.open] for parameter
   /// semantics.
@@ -76,8 +91,12 @@ class MessageStore {
     return MessageStore._(db);
   }
 
-  /// Closes the underlying database. The store must not be used afterwards.
-  Future<void> close() => _db.close();
+  /// Closes the underlying database and the [channelChanges] stream.
+  /// The store must not be used afterwards.
+  Future<void> close() async {
+    await _channelChanges.close();
+    await _db.close();
+  }
 
   // ---------------------------------------------------------------------------
   // Subscriptions
@@ -85,8 +104,9 @@ class MessageStore {
 
   /// Records a new channel subscription. Used after the device successfully
   /// exchanges a join key for a device token.
-  Future<void> joinChannel(Channel channel) {
-    return _db.channels.upsert(channel);
+  Future<void> joinChannel(Channel channel) async {
+    await _db.channels.upsert(channel);
+    _channelChanges.add(ChannelJoinedEvent(channel: channel));
   }
 
   /// Lists channels currently subscribed to (state = active). Pass
@@ -108,14 +128,22 @@ class MessageStore {
   /// Handles a `channel_renamed` system event by updating the local channel
   /// name. No-op if the channel isn't tracked locally.
   Future<void> handleChannelRenamed(String slug, String newName) async {
-    await _db.channels.rename(slug, newName);
+    final affected = await _db.channels.rename(slug, newName);
+    if (affected > 0) {
+      _channelChanges.add(ChannelRenamedEvent(slug: slug, newName: newName));
+    }
   }
 
   /// Handles a `channel_slug_changed` system event by replacing the slug
   /// in place. Messages keep their relationship through SQLite's foreign
   /// key cascade.
   Future<void> handleChannelSlugChanged(String oldSlug, String newSlug) async {
-    await _db.channels.changeSlug(oldSlug, newSlug);
+    final affected = await _db.channels.changeSlug(oldSlug, newSlug);
+    if (affected > 0) {
+      _channelChanges.add(
+        ChannelSlugChangedEvent(oldSlug: oldSlug, newSlug: newSlug),
+      );
+    }
   }
 
   /// Handles a `channel_deleted` system event. **Atomically wipes all
@@ -123,33 +151,39 @@ class MessageStore {
   /// single transaction. The tombstone row remains so the user can be
   /// shown a "this channel is gone" notice.
   Future<void> handleChannelDeleted(String slug, {DateTime? at}) async {
-    await _markInactiveAndPurge(
+    final affected = await _markInactiveAndPurge(
       slug,
       newState: ChannelState.deleted,
       at: at ?? DateTime.now(),
     );
+    if (affected > 0) {
+      _channelChanges.add(ChannelDeletedEvent(slug: slug));
+    }
   }
 
   /// Handles a `subscription_revoked` system event. Same effect as
   /// [handleChannelDeleted] but tagged distinctly for telemetry.
   Future<void> handleSubscriptionRevoked(String slug, {DateTime? at}) async {
-    await _markInactiveAndPurge(
+    final affected = await _markInactiveAndPurge(
       slug,
       newState: ChannelState.revoked,
       at: at ?? DateTime.now(),
     );
+    if (affected > 0) {
+      _channelChanges.add(ChannelRevokedEvent(slug: slug));
+    }
   }
 
-  Future<void> _markInactiveAndPurge(
+  Future<int> _markInactiveAndPurge(
     String slug, {
     required ChannelState newState,
     required DateTime at,
   }) async {
-    await _db.raw.transaction((txn) async {
+    return _db.raw.transaction((txn) async {
       final messages = MessagesDao(txn);
       final channels = ChannelsDao(txn);
       await messages.purgeChannel(slug);
-      await channels.markInactive(
+      return channels.markInactive(
         slug,
         newState: newState,
         stateChangedAt: at,
@@ -269,7 +303,11 @@ class MessageStore {
     );
     var tombstonesRemoved = 0;
     for (final slug in expired) {
-      tombstonesRemoved += await _db.channels.hardDelete(slug);
+      final removed = await _db.channels.hardDelete(slug);
+      if (removed > 0) {
+        tombstonesRemoved += removed;
+        _channelChanges.add(ChannelPurgedEvent(slug: slug));
+      }
     }
 
     return MaintenanceResult(

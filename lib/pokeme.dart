@@ -10,6 +10,7 @@ export 'src/storage/messages_dao.dart';
 export 'src/storage/sync_state_dao.dart';
 
 export 'src/store/message_store.dart';
+export 'src/store/channel_state_change.dart';
 
 export 'src/receiver/push_payload.dart';
 export 'src/receiver/push_receiver.dart';
