@@ -62,6 +62,8 @@ class MessageStore {
   final PokemeDatabase _db;
   final StreamController<ChannelStateChange> _channelChanges =
       StreamController<ChannelStateChange>.broadcast();
+  final StreamController<Message> _newMessages =
+      StreamController<Message>.broadcast();
 
   /// How long an acknowledged tombstone lingers before the sweep removes
   /// the channel row. The user has this long to revisit the notice before
@@ -78,6 +80,16 @@ class MessageStore {
   /// historical events — the stream is broadcast, not replay-cached.
   Stream<ChannelStateChange> get channelChanges => _channelChanges.stream;
 
+  /// Broadcast stream of newly-stored alert messages.
+  ///
+  /// Fires after [receiveMessage] inserts a message that is genuinely new
+  /// (not a duplicate, not dropped). UI screens use this to update their
+  /// channel list ordering, unread badges, and message bubbles in real time.
+  ///
+  /// Multiple listeners are supported. Late subscribers do not receive
+  /// historical events.
+  Stream<Message> get newMessages => _newMessages.stream;
+
   /// Opens the store at [path]. See [PokemeDatabase.open] for parameter
   /// semantics.
   static Future<MessageStore> open({
@@ -91,10 +103,11 @@ class MessageStore {
     return MessageStore._(db);
   }
 
-  /// Closes the underlying database and the [channelChanges] stream.
+  /// Closes the underlying database and the event streams.
   /// The store must not be used afterwards.
   Future<void> close() async {
     await _channelChanges.close();
+    await _newMessages.close();
     await _db.close();
   }
 
@@ -213,9 +226,11 @@ class MessageStore {
       return MessageReceiveResult.dropped;
     }
     final inserted = await _db.messages.insert(message);
-    return inserted
-        ? MessageReceiveResult.inserted
-        : MessageReceiveResult.duplicate;
+    if (inserted) {
+      _newMessages.add(message);
+      return MessageReceiveResult.inserted;
+    }
+    return MessageReceiveResult.duplicate;
   }
 
   // ---------------------------------------------------------------------------

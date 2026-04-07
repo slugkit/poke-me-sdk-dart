@@ -113,6 +113,49 @@ void main() {
       expect(result, MessageReceiveResult.dropped);
       expect(await store.countUnread(), 0);
     });
+
+    test('newMessages stream emits the inserted message', () async {
+      await store.joinChannel(makeChannel());
+
+      final received = <Message>[];
+      final sub = store.newMessages.listen(received.add);
+
+      await store.receiveMessage(makeMessage(
+        id: '018f0000-0000-7000-8000-000000000001',
+      ));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(received, hasLength(1));
+      expect(received.first.id, '018f0000-0000-7000-8000-000000000001');
+
+      await sub.cancel();
+    });
+
+    test('newMessages stream does not emit on duplicate', () async {
+      await store.joinChannel(makeChannel());
+      await store.receiveMessage(makeMessage());
+
+      final received = <Message>[];
+      final sub = store.newMessages.listen(received.add);
+
+      await store.receiveMessage(makeMessage());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(received, isEmpty);
+      await sub.cancel();
+    });
+
+    test('newMessages stream does not emit on dropped', () async {
+      // Channel is unknown — message will be dropped.
+      final received = <Message>[];
+      final sub = store.newMessages.listen(received.add);
+
+      await store.receiveMessage(makeMessage());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(received, isEmpty);
+      await sub.cancel();
+    });
   });
 
   group('system event handlers', () {
