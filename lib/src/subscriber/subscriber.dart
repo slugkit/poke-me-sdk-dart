@@ -14,7 +14,7 @@ import '../store/message_store.dart';
 ///
 /// Typical use:
 /// ```dart
-/// final result = await subscriber.subscribeByJoinKey('jk-abc123');
+/// final result = await subscriber.subscribeByJoinKey('jk_abc123');
 /// // result.channel is now in MessageStore.listChannels()
 /// ```
 class Subscriber {

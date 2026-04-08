@@ -19,7 +19,7 @@ void main() {
         expect(request.url.path, '/api/v1/subscribe/by-key');
         expect(request.headers['content-type'], 'application/json');
         expect(jsonDecode(request.body), {
-          'join_key': 'jk-secret',
+          'join_key': 'jk_secret',
           'platform': 'macos',
           'push_token': 'apns-abc',
         });
@@ -42,7 +42,7 @@ void main() {
       final client = buildClient(mock);
       final result = await client.subscribeByJoinKey(
         const SubscribeByKeyRequest(
-          joinKey: 'jk-secret',
+          joinKey: 'jk_secret',
           platform: DevicePlatform.macos,
           pushToken: 'apns-abc',
         ),
@@ -74,7 +74,7 @@ void main() {
 
       await buildClient(mock).subscribeByJoinKey(
         const SubscribeByKeyRequest(
-          joinKey: 'jk-foo',
+          joinKey: 'jk_foo',
           platform: DevicePlatform.ios,
           pushToken: 'tok',
           deviceId: 'existing-device',
@@ -99,7 +99,7 @@ void main() {
       try {
         await buildClient(mock).subscribeByJoinKey(
           const SubscribeByKeyRequest(
-            joinKey: 'jk-revoked',
+            joinKey: 'jk_revoked',
             platform: DevicePlatform.android,
             pushToken: 'tok',
           ),
@@ -125,7 +125,7 @@ void main() {
       try {
         await buildClient(mock).subscribeByJoinKey(
           const SubscribeByKeyRequest(
-            joinKey: 'jk-x',
+            joinKey: 'jk_x',
             platform: DevicePlatform.web,
             pushToken: 'tok',
           ),
@@ -156,7 +156,7 @@ void main() {
       try {
         await buildClient(mock).subscribeByJoinKey(
           const SubscribeByKeyRequest(
-            joinKey: 'jk-bogus',
+            joinKey: 'jk_bogus',
             platform: DevicePlatform.macos,
             pushToken: 'tok',
           ),
@@ -360,7 +360,7 @@ void main() {
       try {
         await buildClient(mock).subscribeByJoinKey(
           const SubscribeByKeyRequest(
-            joinKey: 'jk-x',
+            joinKey: 'jk_x',
             platform: DevicePlatform.ios,
             pushToken: 'tok',
           ),

@@ -58,7 +58,7 @@ void main() {
         expect(request.method, 'POST');
         expect(request.url.path, '/api/v1/subscribe/by-key');
         final body = jsonDecode(request.body) as Map<String, dynamic>;
-        expect(body['join_key'], 'jk-abc');
+        expect(body['join_key'], 'jk_abc');
         expect(body['platform'], 'macos');
         expect(body['push_token'], 'apns-abc');
         expect(body.containsKey('device_id'), isFalse);
@@ -75,7 +75,7 @@ void main() {
       });
 
       final subscriber = buildSubscriber(mock);
-      final channel = await subscriber.subscribeByJoinKey('jk-abc');
+      final channel = await subscriber.subscribeByJoinKey('jk_abc');
 
       expect(channel.slug, 'acme/news');
       expect(channel.name, 'ACME News');
@@ -110,7 +110,7 @@ void main() {
         );
       });
 
-      await buildSubscriber(mock).subscribeByJoinKey('jk-2');
+      await buildSubscriber(mock).subscribeByJoinKey('jk_2');
 
       expect(await store.getDeviceToken(), 'dt-new');
     });
@@ -127,7 +127,7 @@ void main() {
       final subscriber = buildSubscriber(mock);
 
       await expectLater(
-        subscriber.subscribeByJoinKey('jk-bad'),
+        subscriber.subscribeByJoinKey('jk_bad'),
         throwsA(isA<PokeApiException>()),
       );
 

@@ -156,7 +156,7 @@ void main() {
 
     test('subscribeByJoinKey rejects an invalid key', () async {
       await expectLater(
-        subscriber.subscribeByJoinKey('jk-definitely-not-valid-xxxxxxxx'),
+        subscriber.subscribeByJoinKey('jk_definitely_not_valid_xxxxxxxx'),
         throwsA(isA<PokeApiException>().having(
           (e) => e.statusCode,
           'statusCode',
