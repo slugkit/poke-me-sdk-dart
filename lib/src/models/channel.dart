@@ -28,7 +28,7 @@ class Channel {
     required this.slug,
     required this.name,
     required this.joinedAt,
-    required this.deviceToken,
+    required this.subscriptionId,
     this.state = ChannelState.active,
     this.stateChangedAt,
     this.acknowledgedAt,
@@ -44,9 +44,13 @@ class Channel {
   /// When the device first joined this channel.
   final DateTime joinedAt;
 
-  /// Per-channel auth token issued by the backend (NOT the platform push token).
-  /// Used for authenticated read-only API calls (reconciliation, history).
-  final String deviceToken;
+  /// Per-channel subscription identifier returned by the subscribe
+  /// endpoint. Used to delete an individual subscription via
+  /// `DELETE /api/v1/devices/me/subscriptions/{subscription_id}`.
+  ///
+  /// The device-wide auth token is a singleton, stored in `sync_state`
+  /// under [SyncStateKeys.deviceToken] — not on the channel.
+  final String subscriptionId;
 
   /// Lifecycle state.
   final ChannelState state;
@@ -70,7 +74,7 @@ class Channel {
     String? slug,
     String? name,
     DateTime? joinedAt,
-    String? deviceToken,
+    String? subscriptionId,
     ChannelState? state,
     DateTime? stateChangedAt,
     DateTime? acknowledgedAt,
@@ -83,7 +87,7 @@ class Channel {
       slug: slug ?? this.slug,
       name: name ?? this.name,
       joinedAt: joinedAt ?? this.joinedAt,
-      deviceToken: deviceToken ?? this.deviceToken,
+      subscriptionId: subscriptionId ?? this.subscriptionId,
       state: state ?? this.state,
       stateChangedAt:
           clearStateChangedAt ? null : (stateChangedAt ?? this.stateChangedAt),
@@ -101,7 +105,7 @@ class Channel {
           slug == other.slug &&
           name == other.name &&
           joinedAt == other.joinedAt &&
-          deviceToken == other.deviceToken &&
+          subscriptionId == other.subscriptionId &&
           state == other.state &&
           stateChangedAt == other.stateChangedAt &&
           acknowledgedAt == other.acknowledgedAt &&
@@ -112,7 +116,7 @@ class Channel {
         slug,
         name,
         joinedAt,
-        deviceToken,
+        subscriptionId,
         state,
         stateChangedAt,
         acknowledgedAt,

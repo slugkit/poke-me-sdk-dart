@@ -14,3 +14,9 @@ export 'src/store/channel_state_change.dart';
 
 export 'src/receiver/push_payload.dart';
 export 'src/receiver/push_receiver.dart';
+
+export 'src/api/api_exception.dart';
+export 'src/api/api_types.dart';
+export 'src/api/poke_api_client.dart';
+
+export 'src/subscriber/subscriber.dart';

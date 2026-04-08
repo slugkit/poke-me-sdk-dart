@@ -21,6 +21,15 @@ class SyncStateKeys {
   /// Unix ms; updated whenever the user opens the app. Used by the tombstone
   /// sweep to decide when to acknowledge pending deletion notices.
   static const lastUserOpenAt = 'last_user_open_at';
+
+  /// Server-issued device identifier (UUIDv7). Set on first successful
+  /// subscribe; reused as the `device_id` parameter on subsequent
+  /// subscribes so the backend reuses the same `fanout.devices` row.
+  static const deviceId = 'device_id';
+
+  /// Server-issued device auth token. Used as the bearer token on every
+  /// `/api/v1/devices/me/*` request. Set on first successful subscribe.
+  static const deviceToken = 'device_token';
 }
 
 /// Read/write access to the `sync_state` key/value table.

@@ -29,7 +29,7 @@ void main() {
       slug: slug,
       name: name,
       joinedAt: DateTime(2026, 1, 1),
-      deviceToken: 'tok-$slug',
+      subscriptionId: 'sub-$slug',
       state: state,
     );
   }

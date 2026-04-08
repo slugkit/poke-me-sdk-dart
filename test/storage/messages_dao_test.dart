@@ -19,7 +19,7 @@ void main() {
       slug: 'alerts',
       name: 'Alerts',
       joinedAt: DateTime(2026, 1, 1),
-      deviceToken: 'tok',
+      subscriptionId: 'sub-alerts',
     ));
   });
 
@@ -138,7 +138,7 @@ void main() {
         slug: 'other',
         name: 'Other',
         joinedAt: DateTime(2026, 1, 1),
-        deviceToken: 'tok2',
+        subscriptionId: 'sub-other',
       ));
       await db.messages.insert(makeMessage(
         id: '018f0000-0000-7000-8000-000000000003',
@@ -242,7 +242,7 @@ void main() {
           slug: 'alerts',
           name: 'Alerts',
           joinedAt: DateTime(2026, 1, 1),
-          deviceToken: 'tok',
+          subscriptionId: 'sub-alerts',
           retentionDays: 0,
         ));
         await insertAged('018f0000-0000-7000-8000-000000000001', 365);

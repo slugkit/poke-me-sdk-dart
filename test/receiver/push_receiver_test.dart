@@ -28,7 +28,7 @@ void main() {
       slug: slug,
       name: 'Channel $slug',
       joinedAt: DateTime(2026, 1, 1),
-      deviceToken: 'tok-$slug',
+      subscriptionId: 'sub-$slug',
     ));
   }
 

@@ -29,7 +29,7 @@ void main() {
       slug: slug,
       name: name,
       joinedAt: DateTime(2026, 1, 1),
-      deviceToken: 'tok-$slug',
+      subscriptionId: 'sub-$slug',
       state: state,
     );
   }
@@ -43,7 +43,7 @@ void main() {
       expect(fetched!.slug, 'alerts');
       expect(fetched.name, 'Alerts');
       expect(fetched.state, ChannelState.active);
-      expect(fetched.deviceToken, 'tok-alerts');
+      expect(fetched.subscriptionId, 'sub-alerts');
     });
 
     test('findBySlug returns null for unknown slug', () async {

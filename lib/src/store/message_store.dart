@@ -352,6 +352,36 @@ class MessageStore {
   }
 
   // ---------------------------------------------------------------------------
+  // Device identity (singletons in sync_state)
+  // ---------------------------------------------------------------------------
+
+  /// Returns the server-issued device id, or `null` if the device has
+  /// never successfully subscribed.
+  Future<String?> getDeviceId() => _db.syncState.get(SyncStateKeys.deviceId);
+
+  /// Returns the bearer token used for `/api/v1/devices/me/*` requests,
+  /// or `null` if the device has never successfully subscribed.
+  Future<String?> getDeviceToken() =>
+      _db.syncState.get(SyncStateKeys.deviceToken);
+
+  /// Persists the device id and bearer token returned by a successful
+  /// subscribe call. Both are device-wide singletons.
+  Future<void> setDeviceCredentials({
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    await _db.syncState.set(SyncStateKeys.deviceId, deviceId);
+    await _db.syncState.set(SyncStateKeys.deviceToken, deviceToken);
+  }
+
+  /// Clears device id and token. Used on `DELETE /devices/me` (uninstall)
+  /// or when the server invalidates the token.
+  Future<void> clearDeviceCredentials() async {
+    await _db.syncState.remove(SyncStateKeys.deviceId);
+    await _db.syncState.remove(SyncStateKeys.deviceToken);
+  }
+
+  // ---------------------------------------------------------------------------
   // Reconciliation cursor
   // ---------------------------------------------------------------------------
 

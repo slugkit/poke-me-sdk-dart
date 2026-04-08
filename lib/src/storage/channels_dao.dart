@@ -154,7 +154,7 @@ class ChannelsDao {
       'slug': c.slug,
       'name': c.name,
       'joined_at': c.joinedAt.millisecondsSinceEpoch,
-      'device_token': c.deviceToken,
+      'subscription_id': c.subscriptionId,
       'state': c.state.name,
       'state_changed_at': c.stateChangedAt?.millisecondsSinceEpoch,
       'acknowledged_at': c.acknowledgedAt?.millisecondsSinceEpoch,
@@ -167,7 +167,7 @@ class ChannelsDao {
       slug: row['slug'] as String,
       name: row['name'] as String,
       joinedAt: DateTime.fromMillisecondsSinceEpoch(row['joined_at'] as int),
-      deviceToken: row['device_token'] as String,
+      subscriptionId: row['subscription_id'] as String,
       state: ChannelState.fromString(row['state'] as String),
       stateChangedAt: row['state_changed_at'] == null
           ? null

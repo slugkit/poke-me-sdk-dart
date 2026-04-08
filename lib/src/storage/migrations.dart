@@ -26,12 +26,17 @@ const List<Migration> migrations = [
     statements: [
       // Channels: denormalised state for each channel the device is or was
       // subscribed to.
+      //
+      // The device_id and device_token (returned by the subscribe endpoint)
+      // are device-wide singletons and live in sync_state. The per-channel
+      // subscription_id is what's needed to delete a single subscription
+      // via DELETE /api/v1/devices/me/subscriptions/{sub_ref}.
       '''
       CREATE TABLE channels (
         slug              TEXT PRIMARY KEY,
         name              TEXT NOT NULL,
         joined_at         INTEGER NOT NULL,
-        device_token      TEXT NOT NULL,
+        subscription_id   TEXT NOT NULL,
         state             TEXT NOT NULL
                               CHECK (state IN ('active', 'revoked', 'deleted')),
         state_changed_at  INTEGER,
