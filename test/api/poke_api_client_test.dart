@@ -86,7 +86,7 @@ void main() {
       final mock = MockClient((request) async {
         return http.Response(
           jsonEncode({
-            'type': 'https://docs.push-me.io/errors/invalid_join_key',
+            'type': 'https://docs.poke-me.io/errors/invalid_join_key',
             'title': 'Invalid join key',
             'status': 401,
             'detail': 'The join key has been revoked.',
@@ -108,7 +108,7 @@ void main() {
       } on PokeApiException catch (e) {
         expect(e.statusCode, 401);
         expect(e.problemType,
-            'https://docs.push-me.io/errors/invalid_join_key');
+            'https://docs.poke-me.io/errors/invalid_join_key');
         expect(e.title, 'Invalid join key');
         expect(e.detail, 'The join key has been revoked.');
         expect(e.isClientError, isTrue);
