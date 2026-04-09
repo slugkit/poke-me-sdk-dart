@@ -76,7 +76,7 @@ The app should display an **FCM Token**. Copy it and use it to send a test push 
 1. Go to [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/identifiers/list)
 2. Click **+** to register a new identifier
 3. Select **App IDs → App**
-4. Enter description (e.g. "poke") and bundle ID: `io.pokeme.app`
+4. Enter description (e.g. "push") and bundle ID: `io.pokeme.app`
 5. Under **Capabilities**, tick **Push Notifications**
 6. Click **Continue → Register**
 
