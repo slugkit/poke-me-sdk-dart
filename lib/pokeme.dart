@@ -26,4 +26,9 @@ export 'src/receiver/push_receiver.dart';
 
 export 'src/api/api_exception.dart';
 export 'src/api/api_types.dart';
+export 'src/api/byoa_api_types.dart';
 export 'src/api/poke_api_client.dart';
+
+export 'src/identity/identity_client.dart';
+
+export 'src/poke_me.dart';

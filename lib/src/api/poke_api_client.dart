@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
 import 'api_types.dart';
+import 'byoa_api_types.dart';
 import 'channel_api_types.dart';
 
 /// HTTP client for the poke-me backend's device-facing endpoints.
@@ -36,6 +37,55 @@ class PokeApiClient {
   /// Closes the underlying HTTP client. Call when the client is no longer
   /// needed (typically at app shutdown).
   void close() => _client.close();
+
+  // ---------------------------------------------------------------------------
+  // BYOA — device registration & identity (identity / unicast axis)
+  // ---------------------------------------------------------------------------
+
+  /// `POST /api/v1/apps/{appId}/devices` — register an anonymous install for a
+  /// BYOA app, authenticated by the publishable client key (`ck_…`) embedded
+  /// in the binary. Returns the device id and the one-time device token
+  /// (`dt_…`) the SDK stores locally for subsequent `/devices/me/*` calls.
+  ///
+  /// **Planned contract** — this endpoint is not yet implemented backend-side
+  /// (see `design-docs/backend/BYOA.md`). The shape here matches the design
+  /// sketch; it may tighten before the endpoint ships.
+  Future<RegisterDeviceResponse> registerDevice({
+    required String appId,
+    required String clientKey,
+    required RegisterDeviceRequest request,
+  }) async {
+    final body = await _post(
+      path: '/api/v1/apps/$appId/devices',
+      body: request.toJson(),
+      extraHeaders: {'x-client-key': clientKey},
+    );
+    return RegisterDeviceResponse.fromJson(body);
+  }
+
+  /// `POST /api/v1/devices/me/identify` — bind the calling device to a subject
+  /// keyed by `(app_id, external_user_id)`, creating the subject on first use.
+  /// Idempotent per external id; returns the subject id.
+  Future<IdentifyResponse> identify({
+    required String deviceToken,
+    required IdentifyRequest request,
+  }) async {
+    final body = await _post(
+      path: '/api/v1/devices/me/identify',
+      deviceToken: deviceToken,
+      body: request.toJson(),
+    );
+    return IdentifyResponse.fromJson(body);
+  }
+
+  /// `POST /api/v1/devices/me/unidentify` — clear the device→subject binding
+  /// on logout. The device's app binding is kept; only the user is cleared.
+  Future<void> unidentify({required String deviceToken}) async {
+    await _post(
+      path: '/api/v1/devices/me/unidentify',
+      deviceToken: deviceToken,
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Subscribe (no device token yet)
@@ -184,14 +234,16 @@ class PokeApiClient {
 
   Future<Map<String, dynamic>> _post({
     required String path,
-    required Map<String, dynamic> body,
+    Map<String, dynamic>? body,
     String? deviceToken,
+    Map<String, String>? extraHeaders,
   }) async {
     return _send(
       method: 'POST',
       path: path,
       body: body,
       deviceToken: deviceToken,
+      extraHeaders: extraHeaders,
     );
   }
 
@@ -227,12 +279,14 @@ class PokeApiClient {
     required String path,
     Map<String, dynamic>? body,
     String? deviceToken,
+    Map<String, String>? extraHeaders,
   }) async {
     final uri = baseUrl.resolve(path);
     final headers = <String, String>{
       'accept': 'application/json',
       if (body != null) 'content-type': 'application/json',
       if (deviceToken != null) 'authorization': 'Bearer $deviceToken',
+      ...?extraHeaders,
     };
     final encoded = body == null ? null : jsonEncode(body);
 
