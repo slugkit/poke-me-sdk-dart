@@ -2,7 +2,7 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pokeme/pokeme.dart';
+import 'package:pokeme/channels.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 /// End-to-end tests that exercise the SDK against the real backend

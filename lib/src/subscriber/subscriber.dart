@@ -1,5 +1,6 @@
 import '../api/api_exception.dart';
 import '../api/api_types.dart';
+import '../api/channel_api_types.dart';
 import '../api/poke_api_client.dart';
 import '../models/channel.dart';
 import '../push_token_service.dart';

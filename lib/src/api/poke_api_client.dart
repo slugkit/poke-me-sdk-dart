@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import 'api_exception.dart';
 import 'api_types.dart';
+import 'channel_api_types.dart';
 
 /// HTTP client for the poke-me backend's device-facing endpoints.
 ///
