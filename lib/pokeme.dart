@@ -23,6 +23,8 @@ export 'src/store/channel_state_change.dart';
 
 export 'src/receiver/push_payload.dart';
 export 'src/receiver/push_receiver.dart';
+export 'src/receiver/push_message_channel.dart';
+export 'src/receiver/push_service.dart';
 
 export 'src/api/api_exception.dart';
 export 'src/api/api_types.dart';

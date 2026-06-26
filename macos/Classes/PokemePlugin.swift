@@ -5,7 +5,9 @@ import UserNotifications
 public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate {
     private var methodChannel: FlutterMethodChannel?
     private var eventChannel: FlutterEventChannel?
+    private var messageChannel: FlutterEventChannel?
     private var tokenStreamHandler: TokenStreamHandler?
+    private var messageStreamHandler: MessageStreamHandler?
     private var pendingTokenResult: FlutterResult?
 
     /// Shared instance so the AppDelegate can forward token callbacks.
@@ -31,6 +33,16 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         )
         eventChannel.setStreamHandler(streamHandler)
         instance.eventChannel = eventChannel
+
+        let messageStreamHandler = MessageStreamHandler()
+        instance.messageStreamHandler = messageStreamHandler
+
+        let messageChannel = FlutterEventChannel(
+            name: "io.pokeme.pokeme/push_messages",
+            binaryMessenger: registrar.messenger
+        )
+        messageChannel.setStreamHandler(messageStreamHandler)
+        instance.messageChannel = messageChannel
 
         // Set ourselves as the notification centre delegate — required on macOS
         // for the authorisation dialog to appear.
@@ -159,6 +171,23 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         )
     }
 
+    /// Called by the AppDelegate for silent / background remote notifications
+    /// (which do not pass through the notification centre delegate).
+    public func deliverRemoteNotification(userInfo: [AnyHashable: Any]) {
+        messageStreamHandler?.send(payload: PokemePlugin.extractPayload(userInfo))
+    }
+
+    /// Flattens the APNs `userInfo` to a Flutter-codec-friendly `[String: Any]`,
+    /// dropping the `aps` envelope so only the publisher's custom keys remain.
+    static func extractPayload(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+        var payload: [String: Any] = [:]
+        for (key, value) in userInfo {
+            guard let key = key as? String, key != "aps" else { continue }
+            payload[key] = value
+        }
+        return payload
+    }
+
     // MARK: - UNUserNotificationCenterDelegate
 
     public func userNotificationCenter(
@@ -166,7 +195,17 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        deliverRemoteNotification(userInfo: notification.request.content.userInfo)
         completionHandler([.banner, .badge, .sound])
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        deliverRemoteNotification(userInfo: response.notification.request.content.userInfo)
+        completionHandler()
     }
 }
 
@@ -185,5 +224,23 @@ private class TokenStreamHandler: NSObject, FlutterStreamHandler {
 
     func send(token: String) {
         eventSink?(token)
+    }
+}
+
+private class MessageStreamHandler: NSObject, FlutterStreamHandler {
+    private var eventSink: FlutterEventSink?
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        self.eventSink = events
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        return nil
+    }
+
+    func send(payload: [String: Any]) {
+        eventSink?(payload)
     }
 }

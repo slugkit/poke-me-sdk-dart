@@ -5,7 +5,9 @@ import UserNotifications
 public class PokemePlugin: NSObject, FlutterPlugin {
     private var methodChannel: FlutterMethodChannel?
     private var eventChannel: FlutterEventChannel?
+    private var messageChannel: FlutterEventChannel?
     private var tokenStreamHandler: TokenStreamHandler?
+    private var messageStreamHandler: MessageStreamHandler?
     private var pendingTokenResult: FlutterResult?
 
     public static func register(with registrar: FlutterPluginRegistrar) {
@@ -27,6 +29,16 @@ public class PokemePlugin: NSObject, FlutterPlugin {
         )
         eventChannel.setStreamHandler(streamHandler)
         instance.eventChannel = eventChannel
+
+        let messageStreamHandler = MessageStreamHandler()
+        instance.messageStreamHandler = messageStreamHandler
+
+        let messageChannel = FlutterEventChannel(
+            name: "io.pokeme.pokeme/push_messages",
+            binaryMessenger: registrar.messenger()
+        )
+        messageChannel.setStreamHandler(messageStreamHandler)
+        instance.messageChannel = messageChannel
 
         registrar.addApplicationDelegate(instance)
     }
@@ -142,6 +154,27 @@ public class PokemePlugin: NSObject, FlutterPlugin {
             )
         )
     }
+
+    public func application(
+        _ application: UIApplication,
+        didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+        fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
+    ) -> Bool {
+        messageStreamHandler?.send(payload: PokemePlugin.extractPayload(userInfo))
+        completionHandler(.newData)
+        return true
+    }
+
+    /// Flattens the APNs `userInfo` to a Flutter-codec-friendly `[String: Any]`,
+    /// dropping the `aps` envelope so only the publisher's custom keys remain.
+    static func extractPayload(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+        var payload: [String: Any] = [:]
+        for (key, value) in userInfo {
+            guard let key = key as? String, key != "aps" else { continue }
+            payload[key] = value
+        }
+        return payload
+    }
 }
 
 private class TokenStreamHandler: NSObject, FlutterStreamHandler {
@@ -159,5 +192,23 @@ private class TokenStreamHandler: NSObject, FlutterStreamHandler {
 
     func send(token: String) {
         eventSink?(token)
+    }
+}
+
+private class MessageStreamHandler: NSObject, FlutterStreamHandler {
+    private var eventSink: FlutterEventSink?
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+        self.eventSink = events
+        return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+        eventSink = nil
+        return nil
+    }
+
+    func send(payload: [String: Any]) {
+        eventSink?(payload)
     }
 }

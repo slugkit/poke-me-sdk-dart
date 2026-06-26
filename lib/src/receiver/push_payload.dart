@@ -2,6 +2,28 @@ import 'dart:convert';
 
 import '../models/message.dart';
 
+/// Routing origin of a push, discriminating which routing fields are present.
+/// See `design-docs/MESSAGES.md`.
+enum PushOrigin {
+  /// A poke-me channel broadcast — carries [PushPayload.channelSlug] (and, for
+  /// alerts, [AlertPayload.channelName]).
+  channel,
+
+  /// A BYOA unicast to an app end-user — carries [PushPayload.appId] and
+  /// [PushPayload.externalUserId] in place of the channel fields.
+  subject;
+
+  /// Parses the wire value. Absent is treated as [channel] for tolerance with
+  /// pre-`origin` (generation-1) channel payloads.
+  static PushOrigin fromWire(String? value) {
+    if (value == null || value == 'channel') return PushOrigin.channel;
+    if (value == 'subject') return PushOrigin.subject;
+    throw FormatException(
+      "Invalid 'origin' field: expected 'channel' or 'subject', got '$value'",
+    );
+  }
+}
+
 /// Parsed push payload from FCM or APNs.
 ///
 /// Sealed type hierarchy: a payload is either an [AlertPayload] (user-facing
@@ -12,7 +34,10 @@ sealed class PushPayload {
     required this.v,
     required this.id,
     required this.sentAt,
-    required this.channelSlug,
+    required this.origin,
+    this.channelSlug,
+    this.appId,
+    this.externalUserId,
   });
 
   /// Feature generation marker. The receiver can ignore unknown future fields
@@ -25,8 +50,20 @@ sealed class PushPayload {
   /// When the message was sent (server-assigned).
   final DateTime sentAt;
 
-  /// Routing key. Free-form opaque string from the receiver's POV.
-  final String channelSlug;
+  /// Routing origin. Selects which of the routing fields below are populated.
+  final PushOrigin origin;
+
+  /// Channel routing key. Present for [PushOrigin.channel]; `null` for
+  /// [PushOrigin.subject]. Free-form opaque string from the receiver's POV.
+  final String? channelSlug;
+
+  /// BYOA app id. Present for [PushOrigin.subject]; `null` for channel origin.
+  final String? appId;
+
+  /// BYOA opaque end-user id the publisher addressed. Present for
+  /// [PushOrigin.subject]; `null` for channel origin. Lets the app correlate
+  /// the push to its own user and route.
+  final String? externalUserId;
 }
 
 /// User-facing alert. Stored in the local message history and surfaced to
@@ -36,8 +73,11 @@ final class AlertPayload extends PushPayload {
     required super.v,
     required super.id,
     required super.sentAt,
-    required super.channelSlug,
-    required this.channelName,
+    required super.origin,
+    super.channelSlug,
+    super.appId,
+    super.externalUserId,
+    this.channelName,
     required this.title,
     required this.body,
     this.priority = MessagePriority.normal,
@@ -46,8 +86,9 @@ final class AlertPayload extends PushPayload {
   });
 
   /// Human-readable channel label, denormalised so the receiver can display
-  /// without a server lookup.
-  final String channelName;
+  /// without a server lookup. Present for [PushOrigin.channel]; `null` for
+  /// subject origin.
+  final String? channelName;
 
   /// Notification priority.
   final MessagePriority priority;
@@ -63,13 +104,14 @@ final class AlertPayload extends PushPayload {
 }
 
 /// System event. Silently processed by the SDK to keep the local state
-/// in sync with the server. Never displayed to the user.
+/// in sync with the server. Never displayed to the user. Channel-origin only.
 final class SystemPayload extends PushPayload {
   const SystemPayload({
     required super.v,
     required super.id,
     required super.sentAt,
-    required super.channelSlug,
+    required super.origin,
+    super.channelSlug,
     required this.event,
     this.data,
   });
@@ -96,11 +138,26 @@ PushPayload parsePushPayload(Map<String, dynamic> raw) {
   final id = _requireString(raw, 'id');
   final sentAtMs = _requireInt(raw, 'sent_at');
   final sentAt = DateTime.fromMillisecondsSinceEpoch(sentAtMs);
-  final channelSlug = _requireString(raw, 'channel_slug');
+  final origin = PushOrigin.fromWire(_optionalString(raw, 'origin'));
+
+  // The routing fields are mutually exclusive by origin (MESSAGES.md).
+  String? channelSlug;
+  String? appId;
+  String? externalUserId;
+  switch (origin) {
+    case PushOrigin.channel:
+      channelSlug = _requireString(raw, 'channel_slug');
+    case PushOrigin.subject:
+      appId = _requireString(raw, 'app_id');
+      externalUserId = _requireString(raw, 'external_user_id');
+  }
 
   switch (kind) {
     case 'alert':
-      final channelName = _requireString(raw, 'channel_name');
+      // channel_name rides along only for channel origin.
+      final channelName = origin == PushOrigin.channel
+          ? _requireString(raw, 'channel_name')
+          : _optionalString(raw, 'channel_name');
       final title = _requireString(raw, 'title');
       final body = _requireString(raw, 'body');
       final priority = _parsePriority(raw['priority']);
@@ -110,7 +167,10 @@ PushPayload parsePushPayload(Map<String, dynamic> raw) {
         v: v,
         id: id,
         sentAt: sentAt,
+        origin: origin,
         channelSlug: channelSlug,
+        appId: appId,
+        externalUserId: externalUserId,
         channelName: channelName,
         title: title,
         body: body,
@@ -126,6 +186,7 @@ PushPayload parsePushPayload(Map<String, dynamic> raw) {
         v: v,
         id: id,
         sentAt: sentAt,
+        origin: origin,
         channelSlug: channelSlug,
         event: event,
         data: data,

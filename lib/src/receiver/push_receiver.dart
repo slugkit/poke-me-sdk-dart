@@ -76,9 +76,16 @@ class PushReceiver {
   }
 
   Future<PushReceiveResult> _handleAlert(AlertPayload alert) async {
+    final channelSlug = alert.channelSlug;
+    if (channelSlug == null) {
+      // Subject-origin (BYOA) alerts have no channel and are not part of the
+      // channel history this receiver maintains. The higher layer surfaces
+      // them via the pushes stream instead.
+      return PushReceiveResult.alertDropped;
+    }
     final message = Message(
       id: alert.id,
-      channelSlug: alert.channelSlug,
+      channelSlug: channelSlug,
       sentAt: alert.sentAt,
       receivedAt: _clock(),
       priority: alert.priority,
@@ -97,21 +104,30 @@ class PushReceiver {
   }
 
   Future<PushReceiveResult> _handleSystem(SystemPayload event) async {
-    final result = await _dispatchSystem(event);
+    final channelSlug = event.channelSlug;
+    if (channelSlug == null) {
+      // System events are channel-origin reconciliation; one without a channel
+      // is malformed.
+      return PushReceiveResult.systemEventInvalid;
+    }
+    final result = await _dispatchSystem(event, channelSlug);
     if (result == PushReceiveResult.systemEventApplied) {
       await store.recordLastSystemEventId(event.id);
     }
     return result;
   }
 
-  Future<PushReceiveResult> _dispatchSystem(SystemPayload event) async {
+  Future<PushReceiveResult> _dispatchSystem(
+    SystemPayload event,
+    String channelSlug,
+  ) async {
     switch (event.event) {
       case 'channel_renamed':
         final newName = event.data?['new_name'];
         if (newName is! String || newName.isEmpty) {
           return PushReceiveResult.systemEventInvalid;
         }
-        await store.handleChannelRenamed(event.channelSlug, newName);
+        await store.handleChannelRenamed(channelSlug, newName);
         return PushReceiveResult.systemEventApplied;
 
       case 'channel_slug_changed':
@@ -119,15 +135,15 @@ class PushReceiver {
         if (newSlug is! String || newSlug.isEmpty) {
           return PushReceiveResult.systemEventInvalid;
         }
-        await store.handleChannelSlugChanged(event.channelSlug, newSlug);
+        await store.handleChannelSlugChanged(channelSlug, newSlug);
         return PushReceiveResult.systemEventApplied;
 
       case 'channel_deleted':
-        await store.handleChannelDeleted(event.channelSlug, at: _clock());
+        await store.handleChannelDeleted(channelSlug, at: _clock());
         return PushReceiveResult.systemEventApplied;
 
       case 'subscription_revoked':
-        await store.handleSubscriptionRevoked(event.channelSlug, at: _clock());
+        await store.handleSubscriptionRevoked(channelSlug, at: _clock());
         return PushReceiveResult.systemEventApplied;
 
       default:

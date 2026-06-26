@@ -95,6 +95,97 @@ void main() {
     });
   });
 
+  group('parsePushPayload — origin', () {
+    test('defaults to channel origin when absent', () {
+      final raw = <String, dynamic>{
+        'v': 1,
+        'id': '018f0000-0000-7000-8000-0000000000a0',
+        'sent_at': 1712345678901,
+        'kind': 'alert',
+        'channel_slug': 'alerts',
+        'channel_name': 'Alerts',
+        'title': 'Hi',
+        'body': 'there',
+      };
+
+      final alert = parsePushPayload(raw) as AlertPayload;
+      expect(alert.origin, PushOrigin.channel);
+      expect(alert.channelSlug, 'alerts');
+      expect(alert.appId, isNull);
+      expect(alert.externalUserId, isNull);
+    });
+
+    test('parses a subject-origin (BYOA) alert', () {
+      final raw = <String, dynamic>{
+        'v': 1,
+        'id': '018f0000-0000-7000-8000-0000000000a1',
+        'sent_at': 1712345678901,
+        'kind': 'alert',
+        'origin': 'subject',
+        'app_id': '018f4a00-0000-7000-8000-000000000001',
+        'external_user_id': 'rc-user-42',
+        'title': 'Re: your feedback',
+        'body': 'Fixed in 1.4.2',
+      };
+
+      final alert = parsePushPayload(raw) as AlertPayload;
+      expect(alert.origin, PushOrigin.subject);
+      expect(alert.appId, '018f4a00-0000-7000-8000-000000000001');
+      expect(alert.externalUserId, 'rc-user-42');
+      expect(alert.channelSlug, isNull);
+      expect(alert.channelName, isNull);
+      expect(alert.title, 'Re: your feedback');
+      expect(alert.body, 'Fixed in 1.4.2');
+      expect(alert.priority, MessagePriority.normal);
+    });
+
+    test('subject origin parses with FCM string-coercion', () {
+      final raw = <String, dynamic>{
+        'v': '1',
+        'id': '018f0000-0000-7000-8000-0000000000a2',
+        'sent_at': '1712345678901',
+        'kind': 'alert',
+        'origin': 'subject',
+        'app_id': 'app-1',
+        'external_user_id': 'u-1',
+        'title': 'Hi',
+        'body': 'there',
+        'extras': jsonEncode({'screen': 'feedback'}),
+      };
+
+      final alert = parsePushPayload(raw) as AlertPayload;
+      expect(alert.externalUserId, 'u-1');
+      expect(alert.extras, equals({'screen': 'feedback'}));
+    });
+
+    test('throws on subject origin missing external_user_id', () {
+      final raw = <String, dynamic>{
+        'v': 1,
+        'id': '018f0000-0000-7000-8000-0000000000a3',
+        'sent_at': 1712345678901,
+        'kind': 'alert',
+        'origin': 'subject',
+        'app_id': 'app-1',
+        'title': 'Hi',
+        'body': 'there',
+      };
+      expect(() => parsePushPayload(raw), throwsFormatException);
+    });
+
+    test('throws on an unknown origin value', () {
+      final raw = <String, dynamic>{
+        'v': 1,
+        'id': '018f0000-0000-7000-8000-0000000000a4',
+        'sent_at': 1712345678901,
+        'kind': 'alert',
+        'origin': 'galaxy',
+        'title': 'Hi',
+        'body': 'there',
+      };
+      expect(() => parsePushPayload(raw), throwsFormatException);
+    });
+  });
+
   group('parsePushPayload — system', () {
     test('parses an APNs-style system payload', () {
       final raw = <String, dynamic>{

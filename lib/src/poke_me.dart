@@ -6,6 +6,8 @@ import 'api/byoa_api_types.dart';
 import 'api/poke_api_client.dart';
 import 'identity/identity_client.dart';
 import 'push_token_service.dart';
+import 'receiver/push_payload.dart';
+import 'receiver/push_service.dart';
 import 'store/message_store.dart';
 
 /// Top-level entry point for a BYOA consumer (e.g. a host app embedding the
@@ -32,13 +34,16 @@ class PokeMe {
     required IdentityClient identity,
     required PokeApiClient api,
     required MessageStore store,
+    required PushService pushService,
   })  : _identity = identity,
         _api = api,
-        _store = store;
+        _store = store,
+        _pushService = pushService;
 
   final IdentityClient _identity;
   final PokeApiClient _api;
   final MessageStore _store;
+  final PushService _pushService;
 
   /// The identity orchestrator (register / identify / unidentify / refresh).
   IdentityClient get identity => _identity;
@@ -49,6 +54,14 @@ class PokeMe {
   /// The local store backing device-credential persistence (and message
   /// history, if the consumer uses it).
   MessageStore get store => _store;
+
+  /// Broadcast stream of parsed incoming pushes forwarded from the native
+  /// layer. Listening begins at [init]; payloads delivered before a listener
+  /// subscribes are not replayed.
+  ///
+  /// For a BYOA app, subject-origin alerts arrive as [AlertPayload]s carrying
+  /// the addressed [AlertPayload.externalUserId].
+  Stream<PushPayload> get pushes => _pushService.pushes;
 
   /// Builds and wires a [PokeMe] instance.
   ///
@@ -66,6 +79,7 @@ class PokeMe {
     PushTokenService? tokenService,
     http.Client? httpClient,
     DatabaseFactory? databaseFactory,
+    Stream<Map<String, dynamic>>? pushSource,
   }) async {
     final store = await MessageStore.open(
       path: storePath,
@@ -81,7 +95,13 @@ class PokeMe {
       clientKey: clientKey,
       apnsEnvironment: apnsEnvironment,
     );
-    return PokeMe._(identity: identity, api: api, store: store);
+    final pushService = PushService(source: pushSource)..start();
+    return PokeMe._(
+      identity: identity,
+      api: api,
+      store: store,
+      pushService: pushService,
+    );
   }
 
   /// See [IdentityClient.registerOnLaunch].
@@ -98,9 +118,10 @@ class PokeMe {
   Future<void> refreshPushToken(PushTokenResult pushToken) =>
       _identity.refreshPushToken(pushToken);
 
-  /// Closes the HTTP client and the local store. The instance must not be
-  /// used afterwards.
+  /// Closes the push stream, the HTTP client, and the local store. The
+  /// instance must not be used afterwards.
   Future<void> close() async {
+    await _pushService.dispose();
     _api.close();
     await _store.close();
   }

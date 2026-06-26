@@ -3,6 +3,8 @@ package io.pokeme.pokeme
 import android.app.Activity
 import android.content.Intent
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import com.google.firebase.messaging.FirebaseMessaging
@@ -20,6 +22,7 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     private lateinit var channel: MethodChannel
     private lateinit var eventChannel: EventChannel
+    private lateinit var messageEventChannel: EventChannel
     private var activity: Activity? = null
     private var eventSink: EventChannel.EventSink? = null
 
@@ -29,6 +32,9 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
         eventChannel = EventChannel(binding.binaryMessenger, "io.pokeme.pokeme/push_token_refresh")
         eventChannel.setStreamHandler(this)
+
+        messageEventChannel = EventChannel(binding.binaryMessenger, "io.pokeme.pokeme/push_messages")
+        messageEventChannel.setStreamHandler(messageStreamHandler)
 
         // Listen for token refreshes.
         FirebaseMessaging.getInstance().token.addOnSuccessListener { /* initial fetch handled by getToken */ }
@@ -100,15 +106,63 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
+        messageEventChannel.setStreamHandler(null)
     }
 
-    // EventChannel.StreamHandler
+    // EventChannel.StreamHandler — token refresh channel.
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         eventSink = events
     }
 
     override fun onCancel(arguments: Any?) {
         eventSink = null
+    }
+
+    // Incoming-message channel. A separate handler because the system
+    // instantiates [PokemeMessagingService] independently of this plugin, so the
+    // message sink is held statically (see the companion object) for it to reach.
+    private val messageStreamHandler = object : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+            attachMessageSink(events)
+        }
+
+        override fun onCancel(arguments: Any?) {
+            attachMessageSink(null)
+        }
+    }
+
+    companion object {
+        private val mainHandler = Handler(Looper.getMainLooper())
+        private val lock = Any()
+        private var messageSink: EventChannel.EventSink? = null
+        private val pending = ArrayDeque<Map<String, Any?>>()
+
+        /// Forwards an incoming push payload to Dart. Safe to call from any
+        /// thread (e.g. the messaging service's background thread). Payloads that
+        /// arrive before a Dart listener is attached are buffered and flushed on
+        /// attach.
+        fun deliverMessage(payload: Map<String, Any?>) {
+            synchronized(lock) {
+                val sink = messageSink
+                if (sink != null) {
+                    mainHandler.post { sink.success(payload) }
+                } else {
+                    pending.addLast(payload)
+                }
+            }
+        }
+
+        private fun attachMessageSink(sink: EventChannel.EventSink?) {
+            synchronized(lock) {
+                messageSink = sink
+                if (sink != null) {
+                    while (pending.isNotEmpty()) {
+                        val payload = pending.removeFirst()
+                        mainHandler.post { sink.success(payload) }
+                    }
+                }
+            }
+        }
     }
 
     // ActivityAware
