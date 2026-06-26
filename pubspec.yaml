@@ -1,0 +1,34 @@
+name: pokeme
+description: "Flutter client SDK for the poke-me push notification service — BYOA identity/unicast and channel subscriptions."
+version: 0.1.0
+publish_to: 'none'
+repository: https://github.com/slugkit/poke-me-sdk-dart
+homepage: https://github.com/slugkit/poke-me-sdk-dart
+
+environment:
+  sdk: ^3.11.0
+  flutter: '>=3.27.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  sqflite: ^2.4.0
+  path: ^1.9.0
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  sqflite_common_ffi: ^2.3.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        package: io.pokeme.pokeme
+        pluginClass: PokemePlugin
+      ios:
+        pluginClass: PokemePlugin
+      macos:
+        pluginClass: PokemePlugin
