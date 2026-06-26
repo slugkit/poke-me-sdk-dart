@@ -63,6 +63,27 @@ on every resolved login.
 The publish side (sending a notification to a user) is a server-to-server call
 made from **your** backend with a secret key; it is not part of this SDK.
 
+### Deferring the permission prompt
+
+By default `registerOnLaunch()` requests notification permission, which shows
+the OS prompt on Apple platforms. To follow the Apple HIG and defer that prompt
+to a contextual moment, pass `requestPermission: false` at launch and request
+it later:
+
+```dart
+// At launch — register if already permitted; never shows a prompt:
+await poke.registerOnLaunch(requestPermission: false);
+
+// Later, at a contextual moment (e.g. the user opted into replies):
+await poke.registerOnLaunch();   // requests permission, shows the prompt
+await poke.identify(userId);
+```
+
+When deferred and permission hasn't been granted yet, `registerOnLaunch` is a
+no-op — the device stays unregistered until the contextual call. (On Android
+fetching the token never prompts, so the flag has no effect there; requesting
+`POST_NOTIFICATIONS` on Android 13+ is the host app's responsibility.)
+
 ## Two import surfaces
 
 ```dart

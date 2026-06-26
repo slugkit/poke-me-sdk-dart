@@ -52,7 +52,9 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "getToken":
-            requestTokenWithPermission(result: result)
+            let requestPermission =
+                (call.arguments as? [String: Any])?["requestPermission"] as? Bool ?? true
+            requestToken(requestPermission: requestPermission, result: result)
         case "openSettings":
             openNotificationSettings(result: result)
         default:
@@ -69,7 +71,10 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         result(nil)
     }
 
-    private func requestTokenWithPermission(result: @escaping FlutterResult) {
+    /// Fetches the APNs token. When [requestPermission] is true, shows the
+    /// system authorisation dialog the first time; when false, no dialog is
+    /// shown — registration proceeds only if already authorised.
+    private func requestToken(requestPermission: Bool, result: @escaping FlutterResult) {
         pendingTokenResult = result
 
         let centre = UNUserNotificationCenter.current()
@@ -94,11 +99,33 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
                     )
 
                 case .notDetermined:
-                    // First time — request authorisation (shows the system dialog).
-                    self.requestAuthorisation(centre: centre)
+                    if requestPermission {
+                        // Request authorisation (shows the system dialog).
+                        self.requestAuthorisation(centre: centre)
+                    } else {
+                        // Deferred — do not prompt.
+                        self.completePending(
+                            FlutterError(
+                                code: "PERMISSION_NOT_DETERMINED",
+                                message: "Notification permission has not been requested yet. "
+                                    + "Call getToken(requestPermission: true) at a contextual moment.",
+                                details: nil
+                            )
+                        )
+                    }
 
                 @unknown default:
-                    self.requestAuthorisation(centre: centre)
+                    if requestPermission {
+                        self.requestAuthorisation(centre: centre)
+                    } else {
+                        self.completePending(
+                            FlutterError(
+                                code: "PERMISSION_NOT_DETERMINED",
+                                message: "Notification permission has not been requested yet.",
+                                details: nil
+                            )
+                        )
+                    }
                 }
             }
         }

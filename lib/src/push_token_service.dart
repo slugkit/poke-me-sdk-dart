@@ -38,11 +38,21 @@ abstract class PushTokenService {
   /// - Android: FCM token retrieval (Kotlin)
   factory PushTokenService() => ApnsTokenService();
 
-  /// Requests notification permissions and retrieves the push token.
+  /// Retrieves the platform push token.
   ///
-  /// Throws [PushTokenException] if permissions are denied or the
-  /// token cannot be obtained.
-  Future<PushTokenResult> getToken();
+  /// When [requestPermission] is true (default), notification permission is
+  /// requested on Apple platforms — the system prompt is shown if the user has
+  /// not been asked yet. When false, **no prompt is shown**: a token is
+  /// returned only if permission was already granted, otherwise a
+  /// [PushTokenException] (with [PushTokenException.isPermissionDenied] true)
+  /// is thrown. Pass false to defer the prompt to a contextual moment, per the
+  /// Apple Human Interface Guidelines.
+  ///
+  /// On Android the flag has no effect — fetching the FCM token never prompts.
+  ///
+  /// Throws [PushTokenException] if permission is denied / not yet requested,
+  /// or the token cannot be obtained.
+  Future<PushTokenResult> getToken({bool requestPermission = true});
 
   /// Stream of token updates. Emits a new result whenever the platform
   /// rotates the push token.

@@ -105,7 +105,8 @@ class PokeMe {
   }
 
   /// See [IdentityClient.registerOnLaunch].
-  Future<void> registerOnLaunch() => _identity.registerOnLaunch();
+  Future<void> registerOnLaunch({bool requestPermission = true}) =>
+      _identity.registerOnLaunch(requestPermission: requestPermission);
 
   /// See [IdentityClient.identify].
   Future<String> identify(String externalUserId) =>

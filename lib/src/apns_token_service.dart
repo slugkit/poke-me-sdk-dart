@@ -18,9 +18,12 @@ class ApnsTokenService implements PushTokenService {
       Platform.isAndroid ? PushTokenType.fcm : PushTokenType.apns;
 
   @override
-  Future<PushTokenResult> getToken() async {
+  Future<PushTokenResult> getToken({bool requestPermission = true}) async {
     try {
-      final token = await _channel.invokeMethod<String>('getToken');
+      final token = await _channel.invokeMethod<String>(
+        'getToken',
+        {'requestPermission': requestPermission},
+      );
       if (token == null || token.isEmpty) {
         throw PushTokenException(
           'No push token returned. '
