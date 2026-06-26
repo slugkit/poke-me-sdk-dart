@@ -116,7 +116,7 @@ class Subscriber {
     final channel = Channel(
       slug: response.channel.slug,
       // The subscribe response does not yet include the channel name —
-      // see slugkit/poke-me#46. Fall back to the slug so the UI has
+      // Fall back to the slug so the UI has
       // something to display until the backend ships the field.
       name: response.channel.name ?? response.channel.slug,
       joinedAt: DateTime.now(),

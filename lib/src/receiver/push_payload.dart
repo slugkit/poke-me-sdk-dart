@@ -3,7 +3,7 @@ import 'dart:convert';
 import '../models/message.dart';
 
 /// Routing origin of a push, discriminating which routing fields are present.
-/// See `design-docs/MESSAGES.md`.
+/// See the poke-me message envelope spec.
 enum PushOrigin {
   /// A poke-me channel broadcast — carries [PushPayload.channelSlug] (and, for
   /// alerts, [AlertPayload.channelName]).
@@ -28,7 +28,7 @@ enum PushOrigin {
 ///
 /// Sealed type hierarchy: a payload is either an [AlertPayload] (user-facing
 /// notification) or a [SystemPayload] (silently-processed channel state event).
-/// See `design-docs/MESSAGES.md` for the wire schema.
+/// See the poke-me message envelope spec for the wire schema.
 sealed class PushPayload {
   const PushPayload({
     required this.v,

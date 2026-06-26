@@ -1,6 +1,6 @@
 /// Priority levels carried in alert messages.
 ///
-/// See `design-docs/MESSAGES.md` for the per-platform mapping.
+/// See the poke-me message envelope spec for the per-platform mapping.
 enum MessagePriority {
   /// FYIs, batched updates.
   low,

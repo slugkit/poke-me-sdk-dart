@@ -3,9 +3,8 @@
 // identify it to a subject by the developer's opaque external user id, and
 // clear the binding on logout.
 //
-// These are core types (surfaced through `package:pokeme/pokeme.dart`). See
-// `design-docs/backend/BYOA.md` for the model and `design-docs/mobile/SDK.md`
-// for the client surface.
+// These are core types (surfaced through `package:pokeme/pokeme.dart`) — the
+// poke-me BYOA identity/unicast surface.
 //
 // Field naming follows the wire format (snake_case in JSON, camelCase in
 // Dart).
@@ -26,7 +25,7 @@ enum ApnsEnvironment {
 /// Body for `POST /api/v1/apps/{appId}/devices` — BYOA device registration.
 ///
 /// **Planned contract** — the endpoint is not yet implemented backend-side
-/// (see `design-docs/backend/BYOA.md`).
+/// (see the poke-me BYOA model).
 class RegisterDeviceRequest {
   const RegisterDeviceRequest({
     required this.platform,

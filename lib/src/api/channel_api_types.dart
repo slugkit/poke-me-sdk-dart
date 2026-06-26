@@ -7,7 +7,7 @@
 // `api_types.dart`.
 //
 // Field naming follows the wire format (snake_case in JSON, camelCase in
-// Dart) and the API contract documented in `design-docs/backend/API.md`.
+// Dart) and the API contract for the poke-me HTTP API.
 
 import 'api_types.dart';
 
@@ -67,8 +67,8 @@ class ApiChannel {
   /// Server-side channel UUID, when the response includes it.
   final String? id;
 
-  /// Display name. Currently absent from the subscribe response — see
-  /// slugkit/poke-me#46. Callers should fall back to [slug] when null.
+  /// Display name. May be absent from the subscribe response; callers should
+  /// fall back to [slug] when null.
   final String? name;
 
   /// Full routing key (e.g. `acme/news`). May equal [slug] for
@@ -112,8 +112,8 @@ class SubscribeResponse {
 /// Subscription element of the response from `GET /api/v1/devices/me`.
 ///
 /// The current backend returns this slim shape inside the device row.
-/// The richer fields (channel name, joined_at) are tracked under
-/// slugkit/poke-me#46 and slugkit/poke-me#48.
+/// The richer fields (channel name, joined_at) are tracked for a future
+/// iteration.
 class DeviceSubscription {
   const DeviceSubscription({
     required this.id,
@@ -175,7 +175,7 @@ class Device {
 
 /// Element of the response from `GET /api/v1/devices/me/channels`.
 ///
-/// **Note:** as of slugkit/poke-me#48, this endpoint is not yet
+/// **Note:** this endpoint is not yet
 /// implemented backend-side. Use [Device.subscriptions] from
 /// `GET /api/v1/devices/me` instead until the dedicated endpoint
 /// ships with the richer fields (channel name, joined_at).
@@ -204,7 +204,7 @@ class DeviceChannel {
 
 /// Element of the response from `GET /api/v1/devices/me/events?since=`.
 ///
-/// Mirrors the system event types from `design-docs/MESSAGES.md`.
+/// Mirrors the system event types from the poke-me message envelope spec.
 class DeviceSystemEvent {
   const DeviceSystemEvent({
     required this.id,

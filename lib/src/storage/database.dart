@@ -8,7 +8,7 @@ import 'sync_state_dao.dart';
 /// The local SQLite database used by the pokeme SDK.
 ///
 /// Stores channel subscriptions, received user-facing alert messages, and
-/// SDK bookkeeping. See `design-docs/mobile/STORAGE.md` for the schema and
+/// SDK bookkeeping. See the SDK storage layer for the schema and
 /// retention rules.
 class PokemeDatabase {
   PokemeDatabase._(this._db);

@@ -4,8 +4,7 @@
 // `package:pokeme/channels.dart`.
 //
 // Field naming follows the wire format (snake_case in JSON, camelCase
-// in Dart) and the API contract documented in
-// `design-docs/backend/API.md`.
+// in Dart) and the poke-me HTTP API contract.
 
 /// Platform identifier accepted by the device endpoints.
 ///

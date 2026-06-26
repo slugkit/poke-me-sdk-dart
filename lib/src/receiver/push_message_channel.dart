@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 /// The native plugin forwards every received push (Android
 /// `FirebaseMessagingService`, Apple `didReceiveRemoteNotification`) over the
 /// `io.pokeme.pokeme/push_messages` channel. This wrapper exposes those raw
-/// maps verbatim; parsing (against the `design-docs/MESSAGES.md` envelope) and
+/// maps verbatim; parsing (against the poke-me message envelope) and
 /// dispatch live one layer up, in `PushService`.
 class PushMessageChannel {
   PushMessageChannel({EventChannel? channel})

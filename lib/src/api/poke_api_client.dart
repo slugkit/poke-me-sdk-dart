@@ -10,10 +10,6 @@ import 'channel_api_types.dart';
 
 /// HTTP client for the poke-me backend's device-facing endpoints.
 ///
-/// See `design-docs/backend/API.md` for the full route inventory and
-/// `design-docs/backend/MINIMAL_FLOW.md` for the iteration that landed
-/// each endpoint.
-///
 /// All methods throw [PokeApiException] on failure. Transport-level
 /// failures (DNS, timeout) come through as exceptions with no
 /// `statusCode`; HTTP error responses are decoded from RFC 7807
@@ -48,7 +44,7 @@ class PokeApiClient {
   /// (`dt_…`) the SDK stores locally for subsequent `/devices/me/*` calls.
   ///
   /// **Planned contract** — this endpoint is not yet implemented backend-side
-  /// (see `design-docs/backend/BYOA.md`). The shape here matches the design
+  /// (see the poke-me BYOA model). The shape here matches the design
   /// sketch; it may tighten before the endpoint ships.
   Future<RegisterDeviceResponse> registerDevice({
     required String appId,
@@ -126,8 +122,7 @@ class PokeApiClient {
   /// This is the only "what does the device have" endpoint that the
   /// backend currently exposes. The richer dedicated endpoints
   /// ([listDeviceChannels], [getEventsSince], [getChannelHistory]) are
-  /// described in `design-docs/backend/API.md` but not yet implemented
-  /// — see slugkit/poke-me#48.
+  /// described for the poke-me API but not yet implemented backend-side.
   Future<Device> getDevice(String deviceToken) async {
     final body = await _get(
       path: '/api/v1/devices/me',
@@ -139,7 +134,7 @@ class PokeApiClient {
   /// `GET /api/v1/devices/me/channels` — current subscriptions for the
   /// device authenticated by [deviceToken].
   ///
-  /// **Not yet implemented backend-side** — see slugkit/poke-me#48.
+  /// **Not yet implemented backend-side**.
   /// Until the endpoint ships, prefer [getDevice] which returns the
   /// subscriptions inline as part of the device row.
   Future<List<DeviceChannel>> listDeviceChannels(String deviceToken) async {
@@ -157,7 +152,7 @@ class PokeApiClient {
   /// affecting this device since the cursor. Pass `null` to get
   /// everything from the beginning of time.
   ///
-  /// **Not yet implemented backend-side** — see slugkit/poke-me#48.
+  /// **Not yet implemented backend-side**.
   Future<List<DeviceSystemEvent>> getEventsSince({
     required String deviceToken,
     String? sinceMessageId,
@@ -176,7 +171,7 @@ class PokeApiClient {
   /// `GET /api/v1/devices/me/channels/{slug}/history` — slug-history
   /// reconciliation for a single channel.
   ///
-  /// **Not yet implemented backend-side** — see slugkit/poke-me#48.
+  /// **Not yet implemented backend-side**.
   Future<List<ChannelHistoryEntry>> getChannelHistory({
     required String deviceToken,
     required String slug,
@@ -219,7 +214,7 @@ class PokeApiClient {
   /// `DELETE /api/v1/devices/me` — uninstall: revoke all subscriptions
   /// for this device and mark the device row inactive.
   ///
-  /// **Not yet implemented backend-side** — see slugkit/poke-me#48.
+  /// **Not yet implemented backend-side**.
   /// Currently returns 405 Method Not Allowed.
   Future<void> deleteDevice(String deviceToken) async {
     await _delete(
@@ -335,7 +330,7 @@ class PokeApiClient {
       try {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
-          // RFC 7807 fields (the spec — see design-docs/backend/API.md).
+          // RFC 7807 fields (the spec).
           final type = decoded['type'] as String?;
           final title = decoded['title'] as String?;
           final detail = decoded['detail'] as String?;

@@ -108,7 +108,7 @@ class MessagesDao {
 
   /// Deletes all messages for a channel. Used as part of the atomic
   /// revoke/delete flow — call inside the same transaction that updates
-  /// the channel state. See `design-docs/mobile/STORAGE.md`.
+  /// the channel state. See the SDK storage layer.
   Future<int> purgeChannel(String channelSlug) {
     return _db.delete(
       'messages',

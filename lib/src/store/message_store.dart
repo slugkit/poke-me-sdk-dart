@@ -20,7 +20,7 @@ enum MessageReceiveResult {
 
   /// The message was dropped because the channel is unknown locally or not
   /// in the active state. Reconciliation with the backend may be needed
-  /// (the SDK push handler decides — see design-docs/MESSAGES.md).
+  /// (the SDK push handler decides).
   dropped,
 }
 
@@ -45,7 +45,7 @@ class MaintenanceResult {
 /// High-level local persistence facade for the standard poke receiver.
 ///
 /// Wraps the [PokemeDatabase] and its DAOs with operations that enforce
-/// the cross-DAO invariants from `design-docs/mobile/STORAGE.md`:
+/// the cross-DAO invariants from the SDK storage layer:
 ///
 /// - Messages may only exist for channels in the active state.
 ///   [receiveMessage] is the only insertion path; messages for unknown
@@ -210,7 +210,7 @@ class MessageStore {
 
   /// Persists a received user-facing alert.
   ///
-  /// **Gating rules** (per `design-docs/mobile/STORAGE.md`):
+  /// **Gating rules** (per the SDK storage layer):
   /// - If the channel is unknown locally, the message is dropped. The
   ///   higher-level push handler is expected to attempt reconciliation
   ///   via the backend history endpoint and call this method again after

@@ -6,7 +6,7 @@ import 'push_payload.dart';
 /// Lifecycle-managed entry point for incoming pushes.
 ///
 /// Subscribes to the native incoming-message source on [start], parses each raw
-/// payload against the wire envelope (see `design-docs/MESSAGES.md`), and
+/// payload against the wire envelope (see the poke-me message envelope spec), and
 /// re-broadcasts the typed [PushPayload] on [pushes]. A consumer listens to
 /// [pushes] to react to a notification (display, navigate, refresh). For a BYOA
 /// app, subject-origin alerts arrive here with their [AlertPayload.externalUserId]
