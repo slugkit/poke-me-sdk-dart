@@ -1,3 +1,13 @@
+## 0.2.0
+
+* **Decouple the notification-permission prompt from token fetch** (#1).
+  `PushTokenService.getToken` gains a `requestPermission` flag (default true);
+  `IdentityClient.registerOnLaunch` and `PokeMe.registerOnLaunch` forward it.
+  Pass `requestPermission: false` to register/fetch **without** showing the OS
+  prompt — a token is returned only if permission was already granted,
+  otherwise it is a silent no-op for `registerOnLaunch`. Lets hosts defer the
+  prompt to a contextual moment (Apple HIG). Apple-only; Android never prompts.
+
 ## 0.1.0
 
 Initial release — extracted from the poke-me monorepo (history-preserving).

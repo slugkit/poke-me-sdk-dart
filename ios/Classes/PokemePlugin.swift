@@ -46,7 +46,9 @@ public class PokemePlugin: NSObject, FlutterPlugin {
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
         switch call.method {
         case "getToken":
-            requestTokenWithPermission(result: result)
+            let requestPermission =
+                (call.arguments as? [String: Any])?["requestPermission"] as? Bool ?? true
+            requestToken(requestPermission: requestPermission, result: result)
         case "openSettings":
             openNotificationSettings(result: result)
         default:
@@ -67,59 +69,69 @@ public class PokemePlugin: NSObject, FlutterPlugin {
         result(nil)
     }
 
-    private func requestTokenWithPermission(result: @escaping FlutterResult) {
+    /// Fetches the APNs token. When [requestPermission] is true, shows the
+    /// system authorisation prompt if the user hasn't been asked; when false,
+    /// no prompt is shown — registration proceeds only if already authorised,
+    /// otherwise a permission error is returned.
+    private func requestToken(requestPermission: Bool, result: @escaping FlutterResult) {
         pendingTokenResult = result
 
         let centre = UNUserNotificationCenter.current()
 
-        centre.requestAuthorization(options: [.alert, .badge, .sound]) { _, error in
-            if let error = error {
-                DispatchQueue.main.async {
-                    self.completePending(
-                        FlutterError(
-                            code: "PERMISSION_ERROR",
-                            message: error.localizedDescription,
-                            details: nil
-                        )
-                    )
-                }
-                return
-            }
-
-            // Verify the actual status — the request can succeed but the
-            // system may still deny notifications (e.g. missing entitlement).
-            centre.getNotificationSettings { settings in
-                DispatchQueue.main.async {
-                    switch settings.authorizationStatus {
-                    case .authorized, .provisional, .ephemeral:
-                        UIApplication.shared.registerForRemoteNotifications()
-                    case .denied:
+        if requestPermission {
+            centre.requestAuthorization(options: [.alert, .badge, .sound]) { _, error in
+                if let error = error {
+                    DispatchQueue.main.async {
                         self.completePending(
                             FlutterError(
-                                code: "PERMISSION_DENIED",
-                                message: "Notification permission denied. "
-                                    + "Enable notifications in Settings → Notifications → poke.",
-                                details: nil
-                            )
-                        )
-                    case .notDetermined:
-                        self.completePending(
-                            FlutterError(
-                                code: "PERMISSION_NOT_DETERMINED",
-                                message: "Notifications are not allowed for this application. "
-                                    + "Ensure the aps-environment entitlement is included in the provisioning profile.",
-                                details: nil
-                            )
-                        )
-                    @unknown default:
-                        self.completePending(
-                            FlutterError(
-                                code: "PERMISSION_UNKNOWN",
-                                message: "Unknown notification authorisation status",
+                                code: "PERMISSION_ERROR",
+                                message: error.localizedDescription,
                                 details: nil
                             )
                         )
                     }
+                    return
+                }
+                self.registerIfAuthorised(centre)
+            }
+        } else {
+            registerIfAuthorised(centre)
+        }
+    }
+
+    /// Registers for remote notifications iff already authorised; never prompts.
+    private func registerIfAuthorised(_ centre: UNUserNotificationCenter) {
+        centre.getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                switch settings.authorizationStatus {
+                case .authorized, .provisional, .ephemeral:
+                    UIApplication.shared.registerForRemoteNotifications()
+                case .denied:
+                    self.completePending(
+                        FlutterError(
+                            code: "PERMISSION_DENIED",
+                            message: "Notification permission denied. "
+                                + "Enable notifications in Settings → Notifications → poke.",
+                            details: nil
+                        )
+                    )
+                case .notDetermined:
+                    self.completePending(
+                        FlutterError(
+                            code: "PERMISSION_NOT_DETERMINED",
+                            message: "Notification permission has not been requested yet. "
+                                + "Call getToken(requestPermission: true) at a contextual moment.",
+                            details: nil
+                        )
+                    )
+                @unknown default:
+                    self.completePending(
+                        FlutterError(
+                            code: "PERMISSION_UNKNOWN",
+                            message: "Unknown notification authorisation status",
+                            details: nil
+                        )
+                    )
                 }
             }
         }

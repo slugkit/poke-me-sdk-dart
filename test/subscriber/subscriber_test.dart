@@ -13,7 +13,7 @@ class _FakePushTokenService implements PushTokenService {
   final String token;
 
   @override
-  Future<PushTokenResult> getToken() async {
+  Future<PushTokenResult> getToken({bool requestPermission = true}) async {
     return PushTokenResult(type: PushTokenType.apns, token: token);
   }
 

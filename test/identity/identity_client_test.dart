@@ -8,12 +8,23 @@ import 'package:pokeme/pokeme.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 class _FakePushTokenService implements PushTokenService {
-  _FakePushTokenService(this.token);
+  _FakePushTokenService(this.token, {this.throwWhenDeferred = false});
 
   final String token;
 
+  /// When true, simulate "permission not yet granted": throw a permission
+  /// [PushTokenException] if `getToken(requestPermission: false)` is called.
+  final bool throwWhenDeferred;
+
+  /// The most recent value [getToken] was called with.
+  bool? lastRequestPermission;
+
   @override
-  Future<PushTokenResult> getToken() async {
+  Future<PushTokenResult> getToken({bool requestPermission = true}) async {
+    lastRequestPermission = requestPermission;
+    if (throwWhenDeferred && !requestPermission) {
+      throw PushTokenException('not requested', code: 'PERMISSION_NOT_DETERMINED');
+    }
     return PushTokenResult(type: PushTokenType.apns, token: token);
   }
 
@@ -40,9 +51,13 @@ void main() {
     await store.close();
   });
 
-  IdentityClient buildClient(MockClient mock, {String pushToken = 'apns-abc'}) {
+  IdentityClient buildClient(
+    MockClient mock, {
+    String pushToken = 'apns-abc',
+    PushTokenService? tokenService,
+  }) {
     return IdentityClient(
-      tokenService: _FakePushTokenService(pushToken),
+      tokenService: tokenService ?? _FakePushTokenService(pushToken),
       apiClient: PokeApiClient(
         baseUrl: Uri.parse('http://localhost:18080'),
         httpClient: mock,
@@ -76,6 +91,40 @@ void main() {
 
       expect(await store.getDeviceId(), 'dev-1');
       expect(await store.getDeviceToken(), 'dt_token');
+    });
+
+    test('forwards requestPermission to the token service', () async {
+      final token = _FakePushTokenService('apns-abc');
+      final mock = MockClient((request) async => http.Response(
+            jsonEncode({'device_id': 'dev-1', 'device_token': 'dt_token'}),
+            200,
+            headers: {'content-type': 'application/json'},
+          ));
+
+      await buildClient(mock, tokenService: token)
+          .registerOnLaunch(requestPermission: false);
+
+      // Already "authorised" (fake returns a token), so registration proceeds.
+      expect(token.lastRequestPermission, isFalse);
+      expect(await store.getDeviceToken(), 'dt_token');
+    });
+
+    test('deferred prompt: does not register or throw when not yet permitted',
+        () async {
+      final token = _FakePushTokenService('apns-abc', throwWhenDeferred: true);
+      var hit = false;
+      final mock = MockClient((request) async {
+        hit = true;
+        return http.Response('{}', 200);
+      });
+
+      // Should complete without throwing and without touching the backend.
+      await buildClient(mock, tokenService: token)
+          .registerOnLaunch(requestPermission: false);
+
+      expect(hit, isFalse);
+      expect(await store.getDeviceToken(), isNull);
+      expect(await store.getDeviceId(), isNull);
     });
 
     test('refreshes the push token instead of re-registering when known',

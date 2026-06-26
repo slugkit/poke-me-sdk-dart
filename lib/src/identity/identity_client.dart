@@ -51,10 +51,30 @@ class IdentityClient {
   /// - subsequent runs: the device token already exists, so this just pushes
   ///   the (possibly rotated) platform push token up.
   ///
-  /// Throws [PokeApiException] on HTTP/transport errors and
-  /// [PushTokenException] if the platform refuses to issue a push token.
-  Future<void> registerOnLaunch() async {
-    final pushToken = await _tokenService.getToken();
+  /// [requestPermission] is forwarded to [PushTokenService.getToken]. Pass
+  /// false to register **without** showing the OS notification prompt: if
+  /// permission hasn't been granted yet this is a no-op (the device stays
+  /// unregistered until a later call at a contextual moment); if it has been
+  /// granted, registration proceeds normally.
+  ///
+  /// Throws [PokeApiException] on HTTP/transport errors. Throws
+  /// [PushTokenException] if the platform refuses to issue a push token — but
+  /// when [requestPermission] is false, a missing/denied permission is handled
+  /// silently rather than thrown.
+  Future<void> registerOnLaunch({bool requestPermission = true}) async {
+    final PushTokenResult pushToken;
+    try {
+      pushToken = await _tokenService.getToken(
+        requestPermission: requestPermission,
+      );
+    } on PushTokenException catch (e) {
+      if (!requestPermission && e.isPermissionDenied) {
+        // Deferred: the host asked not to prompt and permission isn't granted
+        // yet. Leave the device unregistered until a later contextual call.
+        return;
+      }
+      rethrow;
+    }
 
     final existingToken = await _store.getDeviceToken();
     if (existingToken != null) {
