@@ -33,6 +33,9 @@ class _FakePushTokenService implements PushTokenService {
 
   @override
   Future<void> openSettings() async {}
+
+  @override
+  Future<ApnsEnvironment?> detectApnsEnvironment() async => null;
 }
 
 void main() {
@@ -256,6 +259,117 @@ void main() {
         PushTokenResult(type: PushTokenType.apns, token: 'apns-new'),
       );
       expect(called, isFalse);
+    });
+  });
+
+  group('registration status', () {
+    test('first registration → registered; caches the push token', () async {
+      final mock = MockClient((_) async => http.Response(
+            jsonEncode({'device_id': 'dev-1', 'device_token': 'dt_token'}),
+            200,
+            headers: {'content-type': 'application/json'},
+          ));
+      final client = buildClient(mock, pushToken: 'apns-xyz');
+
+      expect(await client.registerOnLaunch(), RegistrationStatus.registered);
+      expect(client.currentPushToken, 'apns-xyz');
+    });
+
+    test('subsequent launch → refreshed', () async {
+      await store.setDeviceCredentials(deviceId: 'd', deviceToken: 'dt');
+      final mock = MockClient((_) async => http.Response('', 204));
+      expect(await buildClient(mock).registerOnLaunch(),
+          RegistrationStatus.refreshed);
+    });
+
+    test('deferred permission → permissionDeferred', () async {
+      final token = _FakePushTokenService('apns-abc', throwWhenDeferred: true);
+      final mock = MockClient((_) async => http.Response('{}', 200));
+      expect(
+        await buildClient(mock, tokenService: token)
+            .registerOnLaunch(requestPermission: false),
+        RegistrationStatus.permissionDeferred,
+      );
+    });
+  });
+
+  group('ensureRegistered', () {
+    test('alreadyCurrent when the server still has a push token', () async {
+      await store.setDeviceCredentials(deviceId: 'd', deviceToken: 'dt');
+      var reRegistered = false;
+      final mock = MockClient((request) async {
+        if (request.method == 'GET' &&
+            request.url.path == '/api/v1/devices/me') {
+          return http.Response(jsonEncode({'push_token': 'live-token'}), 200,
+              headers: {'content-type': 'application/json'});
+        }
+        reRegistered = true;
+        return http.Response('', 204);
+      });
+
+      expect(await buildClient(mock).ensureRegistered(),
+          RegistrationStatus.alreadyCurrent);
+      expect(reRegistered, isFalse);
+    });
+
+    test('re-registers (refreshed) when the server push token is null',
+        () async {
+      await store.setDeviceCredentials(deviceId: 'd', deviceToken: 'dt');
+      var refreshed = false;
+      final mock = MockClient((request) async {
+        if (request.url.path == '/api/v1/devices/me' &&
+            request.method == 'GET') {
+          return http.Response(jsonEncode({'push_token': null}), 200,
+              headers: {'content-type': 'application/json'});
+        }
+        if (request.url.path == '/api/v1/devices/me/push-token') {
+          refreshed = true;
+          return http.Response('', 204);
+        }
+        return http.Response('unexpected', 500);
+      });
+
+      expect(await buildClient(mock).ensureRegistered(),
+          RegistrationStatus.refreshed);
+      expect(refreshed, isTrue);
+    });
+
+    test('clears creds and re-registers on 404', () async {
+      await store.setDeviceCredentials(deviceId: 'd', deviceToken: 'dt');
+      final mock = MockClient((request) async {
+        if (request.url.path == '/api/v1/devices/me' &&
+            request.method == 'GET') {
+          return http.Response(jsonEncode({'error': 'gone'}), 404,
+              headers: {'content-type': 'application/json'});
+        }
+        // Fresh registration (no device token after clear).
+        return http.Response(
+            jsonEncode({'device_id': 'dev-2', 'device_token': 'dt_new'}), 200,
+            headers: {'content-type': 'application/json'});
+      });
+
+      expect(await buildClient(mock).ensureRegistered(),
+          RegistrationStatus.registered);
+      expect(await store.getDeviceToken(), 'dt_new');
+    });
+  });
+
+  group('identify apns_environment', () {
+    test('sends env on first identify, omits it on a repeat', () async {
+      await store.setDeviceCredentials(deviceId: 'd', deviceToken: 'dt');
+      final bodies = <Map<String, dynamic>>[];
+      final mock = MockClient((request) async {
+        bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+        return http.Response(jsonEncode({'subject_id': 's'}), 200,
+            headers: {'content-type': 'application/json'});
+      });
+      final client = buildClient(mock); // apnsEnvironment: sandbox
+
+      await client.identify('u1');
+      await client.identify('u1');
+
+      expect(bodies[0]['apns_environment'], 'sandbox');
+      expect(bodies[1].containsKey('apns_environment'), isFalse);
     });
   });
 }

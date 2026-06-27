@@ -177,4 +177,25 @@ void main() {
       expect(called, isTrue);
     });
   });
+
+  group('fetchDevicePushToken', () {
+    test('returns the token when present', () async {
+      final mock = MockClient((request) async {
+        expect(request.method, 'GET');
+        expect(request.url.path, '/api/v1/devices/me');
+        return http.Response(jsonEncode({'push_token': 'live-tok'}), 200,
+            headers: {'content-type': 'application/json'});
+      });
+      expect(await buildClient(mock).fetchDevicePushToken('dt'), 'live-tok');
+    });
+
+    test('returns null when the server has no token (revoked)', () async {
+      final mock = MockClient((_) async => http.Response(
+            jsonEncode({'push_token': null}),
+            200,
+            headers: {'content-type': 'application/json'},
+          ));
+      expect(await buildClient(mock).fetchDevicePushToken('dt'), isNull);
+    });
+  });
 }

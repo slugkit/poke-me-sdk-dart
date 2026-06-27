@@ -108,6 +108,31 @@ try {
 
 Set `pokemeLoggingEnabled = false` to silence the SDK's `dart:developer` output.
 
+### APNs environment (read this on Apple)
+
+Leave `apnsEnvironment` **null** and the SDK auto-detects it from the embedded
+provisioning profile (the signing entitlement) on Apple platforms. Pass it
+explicitly only to override.
+
+It must match the **signing entitlement**, not the Dart build mode. Do **not**
+gate it on `kReleaseMode`: a `flutter run --release` to a development-signed
+device receives a **sandbox** token even though `kReleaseMode == true`. Passing
+`production` there makes every push fail with `BadDeviceToken`, after which the
+server cascade-revokes the device and pushes stop silently.
+
+### Recovery & diagnostics
+
+`registerOnLaunch` returns a `RegistrationStatus` (`registered` / `refreshed` /
+`permissionDeferred`). If the server cascade-revokes a device (e.g. after the
+mistake above), recover by polling:
+
+```dart
+final status = await poke.ensureRegistered(); // re-registers if the server lost the token
+```
+
+Diagnostic getters: `poke.currentPushToken`, `await poke.deviceToken`,
+`await poke.deviceId`.
+
 ## Two import surfaces
 
 ```dart

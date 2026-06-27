@@ -45,4 +45,37 @@ void main() {
     expect(result.token, 'apns-tok');
     expect((receivedArgs as Map)['requestPermission'], isFalse);
   });
+
+  group('detectApnsEnvironment', () {
+    void mockEnv(String? value) {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'getApnsEnvironment');
+        return value;
+      });
+    }
+
+    test('maps sandbox / production / unknown / null', () async {
+      final service = ApnsTokenService();
+
+      mockEnv('sandbox');
+      expect(await service.detectApnsEnvironment(), ApnsEnvironment.sandbox);
+
+      mockEnv('production');
+      expect(await service.detectApnsEnvironment(), ApnsEnvironment.production);
+
+      mockEnv('something-else');
+      expect(await service.detectApnsEnvironment(), isNull);
+
+      mockEnv(null);
+      expect(await service.detectApnsEnvironment(), isNull);
+    });
+
+    test('returns null on a PlatformException (unsupported platform)',
+        () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'unimplemented');
+      });
+      expect(await ApnsTokenService().detectApnsEnvironment(), isNull);
+    });
+  });
 }

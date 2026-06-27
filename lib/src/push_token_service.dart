@@ -1,3 +1,4 @@
+import 'api/byoa_api_types.dart';
 import 'apns_token_service.dart';
 
 /// The type of push token obtained from the platform.
@@ -60,6 +61,15 @@ abstract class PushTokenService {
 
   /// Opens the OS notification settings for this app.
   Future<void> openSettings();
+
+  /// Auto-detects the APNs environment from the embedded provisioning profile
+  /// on Apple platforms (`sandbox` / `production`). Returns null when it can't
+  /// be determined (Android, web, or an App Store build with no embedded
+  /// profile) — the caller should fall back to a configured value.
+  ///
+  /// This reflects the **signing entitlement**, which is the correct source of
+  /// truth — unlike Dart's `kReleaseMode`.
+  Future<ApnsEnvironment?> detectApnsEnvironment();
 }
 
 /// Thrown when push token retrieval fails.

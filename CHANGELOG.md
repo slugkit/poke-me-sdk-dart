@@ -1,3 +1,34 @@
+## 0.5.0
+
+BYOA recoverability + observability (from the field report, poke-me-sdk-dart#8):
+
+* **`registerOnLaunch` returns a `RegistrationStatus`** (`registered` /
+  `refreshed` / `permissionDeferred`) instead of `void`, so callers can tell
+  "registered with the server" from "did nothing because permission was
+  deferred". **Breaking** for callers that relied on the `Future<void>` type.
+* **`ensureRegistered()`** — recovers from a server-side cascade-revoke: polls
+  `GET /devices/me` and re-registers if the server has lost this device's push
+  token (or the device row is gone). Returns `alreadyCurrent` when healthy.
+* **`identify` sends `apns_environment` only when it changes** (not on every
+  call), so a corrected value isn't clobbered on each identify. Added an
+  optional per-call `apnsEnvironment` override.
+* **Diagnostic accessors** on `PokeMe`: `currentPushToken`, `deviceToken`,
+  `deviceId`.
+* **`apnsEnvironment` auto-detection** — when omitted from `PokeMe.init`, the
+  SDK reads `aps-environment` from the embedded provisioning profile on Apple
+  platforms (the signing entitlement, not `kReleaseMode`). Eliminates the
+  footgun; pass it explicitly only to override. Docstring/README warn against
+  gating on build mode.
+
+Native fixes (verify on a device — no native CI):
+
+* **iOS/macOS token caching** — `getToken` returns the cached APNs token on a
+  second call within a session instead of waiting on a `didRegister` callback
+  iOS doesn't reliably re-fire (was a 30s timeout).
+* **macOS notification-delegate chaining** — the plugin captures the previous
+  `UNUserNotificationCenter.delegate` and forwards `willPresent` / `didReceive`
+  to it, instead of clobbering other plugins (e.g. flutter_local_notifications).
+
 ## 0.4.0
 
 * **`identify` no longer sends `app_id`.** The backend now derives the app from

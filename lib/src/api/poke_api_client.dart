@@ -84,6 +84,20 @@ class PokeApiClient {
     );
   }
 
+  /// `GET /api/v1/devices/me` — returns the device's current server-side push
+  /// token, or null if the server has none (e.g. after a cascade-revoke
+  /// following repeated push failures). Used by the SDK to detect a revoked
+  /// registration and recover. Throws [PokeApiException] (404) if the device
+  /// row is gone.
+  Future<String?> fetchDevicePushToken(String deviceToken) async {
+    final body = await _get(
+      path: '/api/v1/devices/me',
+      deviceToken: deviceToken,
+    );
+    final token = body['push_token'];
+    return token is String && token.isNotEmpty ? token : null;
+  }
+
   // ---------------------------------------------------------------------------
   // Subscribe (no device token yet)
   // ---------------------------------------------------------------------------
