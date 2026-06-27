@@ -69,14 +69,14 @@ void main() {
   group('identify', () {
     const deviceToken = 'dt_mine';
 
-    test('POSTs app_id + external_user_id and returns the subject id',
+    test('POSTs external_user_id (no app_id) and returns the subject id',
         () async {
       final mock = MockClient((request) async {
         expect(request.method, 'POST');
         expect(request.url.path, '/api/v1/devices/me/identify');
         expect(request.headers['authorization'], 'Bearer $deviceToken');
+        // app_id is derived server-side from the device — not sent.
         expect(jsonDecode(request.body), {
-          'app_id': 'app-uuid',
           'external_user_id': 'revenuecat-user-abc123',
         });
         return http.Response(
@@ -89,7 +89,6 @@ void main() {
       final result = await buildClient(mock).identify(
         deviceToken: deviceToken,
         request: const IdentifyRequest(
-          appId: 'app-uuid',
           externalUserId: 'revenuecat-user-abc123',
         ),
       );
@@ -111,7 +110,6 @@ void main() {
       await buildClient(mock).identify(
         deviceToken: deviceToken,
         request: const IdentifyRequest(
-          appId: 'app-uuid',
           externalUserId: 'u1',
           apnsEnvironment: ApnsEnvironment.sandbox,
         ),
@@ -131,7 +129,7 @@ void main() {
 
       await buildClient(mock).identify(
         deviceToken: deviceToken,
-        request: const IdentifyRequest(appId: 'app-uuid', externalUserId: 'u2'),
+        request: const IdentifyRequest(externalUserId: 'u2'),
       );
     });
 
@@ -148,7 +146,7 @@ void main() {
       try {
         await buildClient(mock).identify(
           deviceToken: deviceToken,
-          request: const IdentifyRequest(appId: 'a', externalUserId: 'u'),
+          request: const IdentifyRequest(externalUserId: 'u'),
         );
         fail('expected PokeApiException');
       } on PokeApiException catch (e) {

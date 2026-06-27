@@ -114,7 +114,6 @@ class IdentityClient {
     final response = await _api.identify(
       deviceToken: deviceToken,
       request: IdentifyRequest(
-        appId: _appId,
         externalUserId: externalUserId,
         apnsEnvironment: _apnsEnvironment,
       ),

@@ -72,17 +72,13 @@ class RegisterDeviceResponse {
 /// Body for `POST /api/v1/devices/me/identify`.
 class IdentifyRequest {
   const IdentifyRequest({
-    required this.appId,
     required this.externalUserId,
     this.apnsEnvironment,
   });
 
-  /// The BYOA app's id (UUID). The same value the developer scopes their
-  /// publish key and subjects to.
-  final String appId;
-
   /// The developer's opaque end-user id (e.g. a RevenueCat app user id).
-  /// poke-me stores it verbatim and keys the subject by `(appId, externalUserId)`.
+  /// poke-me stores it verbatim. The app is derived server-side from the
+  /// authenticated device, so it is not sent here.
   final String externalUserId;
 
   /// APNs environment for this device's token. Optional; meaningful on Apple
@@ -90,7 +86,6 @@ class IdentifyRequest {
   final ApnsEnvironment? apnsEnvironment;
 
   Map<String, dynamic> toJson() => {
-        'app_id': appId,
         'external_user_id': externalUserId,
         if (apnsEnvironment != null) 'apns_environment': apnsEnvironment!.wireValue,
       };
