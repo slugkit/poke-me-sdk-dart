@@ -1,3 +1,14 @@
+## 0.2.1
+
+* **Fix macOS hang on `registerOnLaunch` / `getToken`** (#3). macOS Flutter does
+  not forward the APNs registration callback to plugins (its lifecycle delegate
+  has no remote-notification methods), so the device token never reached the
+  plugin and the future never completed. The macOS plugin now swizzles the host
+  `NSApplicationDelegate` to forward `didRegister`/`didFail` — no host AppDelegate
+  code required.
+* `getToken` now times out (default 30s) and throws a clear `PushTokenException`
+  (code `TIMEOUT`) instead of hanging if the callback never arrives.
+
 ## 0.2.0
 
 * **Decouple the notification-permission prompt from token fetch** (#1).

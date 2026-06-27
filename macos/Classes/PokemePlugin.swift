@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import ObjectiveC
 import UserNotifications
 
 public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate {
@@ -47,6 +48,60 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         // Set ourselves as the notification centre delegate — required on macOS
         // for the authorisation dialog to appear.
         UNUserNotificationCenter.current().delegate = instance
+
+        // Unlike iOS, macOS Flutter does not relay the APNs registration
+        // callbacks (`application:didRegisterForRemoteNotificationsWithDeviceToken:`)
+        // to plugins — `FlutterAppLifecycleDelegate` carries no
+        // remote-notification methods. Without this, the device token never
+        // reaches the plugin and `getToken` hangs. Forward it by swizzling the
+        // host's NSApplicationDelegate, so no host AppDelegate code is needed.
+        instance.installRemoteNotificationForwarding()
+    }
+
+    /// Installs APNs registration forwarding onto the host's
+    /// `NSApplicationDelegate` by swizzling. Idempotent enough for a single
+    /// plugin registration; safe no-op if no app delegate is set yet.
+    private func installRemoteNotificationForwarding() {
+        guard let appDelegate = NSApplication.shared.delegate else { return }
+        let cls: AnyClass = type(of: appDelegate)
+
+        let registerSel = #selector(
+            NSApplicationDelegate.application(_:didRegisterForRemoteNotificationsWithDeviceToken:))
+        if let method = class_getInstanceMethod(cls, registerSel) {
+            let original = method_getImplementation(method)
+            typealias Fn = @convention(c) (AnyObject, Selector, NSApplication, Data) -> Void
+            let block: @convention(block) (AnyObject, NSApplication, Data) -> Void = {
+                receiver, app, token in
+                PokemePlugin.shared?.didRegisterForRemoteNotifications(deviceToken: token)
+                unsafeBitCast(original, to: Fn.self)(receiver, registerSel, app, token)
+            }
+            method_setImplementation(method, imp_implementationWithBlock(block))
+        } else {
+            let block: @convention(block) (AnyObject, NSApplication, Data) -> Void = {
+                _, _, token in
+                PokemePlugin.shared?.didRegisterForRemoteNotifications(deviceToken: token)
+            }
+            class_addMethod(cls, registerSel, imp_implementationWithBlock(block), "v@:@@")
+        }
+
+        let failSel = #selector(
+            NSApplicationDelegate.application(_:didFailToRegisterForRemoteNotificationsWithError:))
+        if let method = class_getInstanceMethod(cls, failSel) {
+            let original = method_getImplementation(method)
+            typealias Fn = @convention(c) (AnyObject, Selector, NSApplication, NSError) -> Void
+            let block: @convention(block) (AnyObject, NSApplication, NSError) -> Void = {
+                receiver, app, error in
+                PokemePlugin.shared?.didFailToRegisterForRemoteNotifications(error: error)
+                unsafeBitCast(original, to: Fn.self)(receiver, failSel, app, error)
+            }
+            method_setImplementation(method, imp_implementationWithBlock(block))
+        } else {
+            let block: @convention(block) (AnyObject, NSApplication, NSError) -> Void = {
+                _, _, error in
+                PokemePlugin.shared?.didFailToRegisterForRemoteNotifications(error: error)
+            }
+            class_addMethod(cls, failSel, imp_implementationWithBlock(block), "v@:@@")
+        }
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
