@@ -60,6 +60,17 @@ class PokeMe {
   /// history, if the consumer uses it).
   MessageStore get store => _store;
 
+  /// The most recent platform push token (APNs/FCM) the SDK obtained this
+  /// session, or null if it hasn't fetched one. Diagnostic.
+  String? get currentPushToken => _identity.currentPushToken;
+
+  /// The server-issued device token (`dt_…`) used for `/devices/me/*` calls,
+  /// or null if the device has never registered. Diagnostic.
+  Future<String?> get deviceToken => _store.getDeviceToken();
+
+  /// The server-assigned device id, or null if never registered. Diagnostic.
+  Future<String?> get deviceId => _store.getDeviceId();
+
   /// Broadcast stream of parsed incoming pushes forwarded from the native
   /// layer. Listening begins at [init]; payloads delivered before a listener
   /// subscribes are not replayed.
@@ -87,9 +98,19 @@ class PokeMe {
   /// Builds and wires a [PokeMe] instance.
   ///
   /// [platform] is supplied by the host (the SDK does not infer it, to stay
-  /// web-safe); [apnsEnvironment] is forwarded to `identify` on Apple
-  /// platforms. [tokenService], [httpClient], and [databaseFactory] are
+  /// web-safe). [tokenService], [httpClient], and [databaseFactory] are
   /// injection seams for testing.
+  ///
+  /// **[apnsEnvironment] — read this.** It is the APNs environment of the token
+  /// this binary will receive, forwarded to `identify` on Apple platforms. Do
+  /// **NOT** gate it on Dart's `kReleaseMode` / `kDebugMode`: the environment is
+  /// determined by the *aps-environment entitlement the binary was signed with*,
+  /// not the compile mode. A `flutter run --release` to a development-signed
+  /// device gets a **sandbox** token even though `kReleaseMode == true`. Passing
+  /// `production` there makes every push fail with `BadDeviceToken`, after which
+  /// the server cascade-revokes the device and pushes stop silently. Mirror your
+  /// signing/entitlement, not your build mode. (Native auto-detection from the
+  /// provisioning profile is planned.)
   static Future<PokeMe> init({
     required Uri baseUrl,
     required String appId,
@@ -127,14 +148,23 @@ class PokeMe {
 
   /// See [IdentityClient.registerOnLaunch]. Failures throw and are also emitted
   /// on [errors].
-  Future<void> registerOnLaunch({bool requestPermission = true}) =>
+  Future<RegistrationStatus> registerOnLaunch({bool requestPermission = true}) =>
       _guard('registerOnLaunch',
           () => _identity.registerOnLaunch(requestPermission: requestPermission));
 
+  /// See [IdentityClient.ensureRegistered] — recovers from a server-side
+  /// cascade-revoke by re-registering if the server has lost this device's push
+  /// token. Failures throw and are also emitted on [errors].
+  Future<RegistrationStatus> ensureRegistered({bool requestPermission = true}) =>
+      _guard('ensureRegistered',
+          () => _identity.ensureRegistered(requestPermission: requestPermission));
+
   /// See [IdentityClient.identify]. Failures throw and are also emitted on
   /// [errors].
-  Future<String> identify(String externalUserId) =>
-      _guard('identify', () => _identity.identify(externalUserId));
+  Future<String> identify(String externalUserId,
+          {ApnsEnvironment? apnsEnvironment}) =>
+      _guard('identify',
+          () => _identity.identify(externalUserId, apnsEnvironment: apnsEnvironment));
 
   /// See [IdentityClient.unidentify]. Failures throw and are also emitted on
   /// [errors].

@@ -1,3 +1,23 @@
+## 0.5.0
+
+BYOA recoverability + observability (from the field report, poke-me-sdk-dart#8):
+
+* **`registerOnLaunch` returns a `RegistrationStatus`** (`registered` /
+  `refreshed` / `permissionDeferred`) instead of `void`, so callers can tell
+  "registered with the server" from "did nothing because permission was
+  deferred". **Breaking** for callers that relied on the `Future<void>` type.
+* **`ensureRegistered()`** — recovers from a server-side cascade-revoke: polls
+  `GET /devices/me` and re-registers if the server has lost this device's push
+  token (or the device row is gone). Returns `alreadyCurrent` when healthy.
+* **`identify` sends `apns_environment` only when it changes** (not on every
+  call), so a corrected value isn't clobbered on each identify. Added an
+  optional per-call `apnsEnvironment` override.
+* **Diagnostic accessors** on `PokeMe`: `currentPushToken`, `deviceToken`,
+  `deviceId`.
+* **`apnsEnvironment` docs warning** — do NOT gate on `kReleaseMode`; it's set
+  by the signing entitlement, not the build mode. (Native auto-detection and the
+  macOS delegate-chaining / iOS token-cache fixes land in a follow-up.)
+
 ## 0.4.0
 
 * **`identify` no longer sends `app_id`.** The backend now derives the app from
