@@ -2,13 +2,18 @@ import Flutter
 import UIKit
 import UserNotifications
 
-public class PokemePlugin: NSObject, FlutterPlugin {
+public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDelegate {
     private var methodChannel: FlutterMethodChannel?
     private var eventChannel: FlutterEventChannel?
     private var messageChannel: FlutterEventChannel?
     private var tokenStreamHandler: TokenStreamHandler?
     private var messageStreamHandler: MessageStreamHandler?
     private var pendingTokenResult: FlutterResult?
+
+    /// The notification-centre delegate installed before ours, so we can forward
+    /// calls we don't consume (e.g. flutter_local_notifications) instead of
+    /// clobbering it.
+    private weak var previousNotificationDelegate: UNUserNotificationCenterDelegate?
 
     /// Last APNs token from `didRegister`. iOS does not always re-fire the
     /// callback on a second `registerForRemoteNotifications()` in the same
@@ -47,6 +52,14 @@ public class PokemePlugin: NSObject, FlutterPlugin {
         instance.messageChannel = messageChannel
 
         registrar.addApplicationDelegate(instance)
+
+        // Become the notification-centre delegate so foreground alerts present
+        // a banner (iOS suppresses them otherwise) and their payload reaches
+        // Dart. Chain to whoever was there before to avoid clobbering other
+        // plugins (e.g. flutter_local_notifications).
+        instance.previousNotificationDelegate =
+            UNUserNotificationCenter.current().delegate
+        UNUserNotificationCenter.current().delegate = instance
     }
 
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -227,6 +240,54 @@ public class PokemePlugin: NSObject, FlutterPlugin {
             payload[key] = value
         }
         return payload
+    }
+
+    // MARK: - UNUserNotificationCenterDelegate
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        // Foreground delivery: forward the payload to Dart, then either let the
+        // previously-installed delegate decide presentation (and own the
+        // completion handler) or present the banner ourselves.
+        messageStreamHandler?.send(
+            payload: PokemePlugin.extractPayload(
+                notification.request.content.userInfo))
+
+        if let prev = previousNotificationDelegate,
+            prev.responds(
+                to: #selector(UNUserNotificationCenterDelegate
+                    .userNotificationCenter(_:willPresent:withCompletionHandler:))) {
+            prev.userNotificationCenter?(
+                center, willPresent: notification,
+                withCompletionHandler: completionHandler)
+        } else if #available(iOS 14.0, *) {
+            completionHandler([.banner, .list, .badge, .sound])
+        } else {
+            completionHandler([.alert, .badge, .sound])
+        }
+    }
+
+    public func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        // Tap / action: forward to the previous delegate if it handles it,
+        // otherwise finish. (Payload delivery to Dart happens via the
+        // application-delegate path to avoid double-emitting on tap.)
+        if let prev = previousNotificationDelegate,
+            prev.responds(
+                to: #selector(UNUserNotificationCenterDelegate
+                    .userNotificationCenter(_:didReceive:withCompletionHandler:))) {
+            prev.userNotificationCenter?(
+                center, didReceive: response,
+                withCompletionHandler: completionHandler)
+        } else {
+            completionHandler()
+        }
     }
 }
 

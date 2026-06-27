@@ -1,3 +1,12 @@
+## 0.5.1
+
+* **iOS: foreground pushes now present a banner** (#10). The plugin installs
+  itself as the `UNUserNotificationCenter` delegate (chained, so it doesn't
+  clobber other plugins like flutter_local_notifications) and implements
+  `willPresent`, also forwarding the payload to Dart. Previously iOS silently
+  suppressed the banner — and didn't deliver the payload — while the app was
+  foregrounded. (macOS already did this.) ⚠️ native — verify on a device.
+
 ## 0.5.0
 
 BYOA recoverability + observability (from the field report, poke-me-sdk-dart#8):
