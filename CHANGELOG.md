@@ -1,3 +1,13 @@
+## 0.4.0
+
+* **`identify` no longer sends `app_id`.** The backend now derives the app from
+  the authenticated device, so `IdentifyRequest` drops its `appId` field and the
+  request body is just `{external_user_id, apns_environment?}`. `PokeMe.identify`
+  / `IdentityClient.identify` are unchanged (`app_id` was always taken from
+  config); only the low-level `IdentifyRequest` constructor is affected.
+  **Requires the matching backend change** that makes `app_id` optional on
+  `POST /api/v1/devices/me/identify`.
+
 ## 0.3.0
 
 * **Service errors no longer vanish.** Previously the SDK threw rich

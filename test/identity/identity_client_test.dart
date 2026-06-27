@@ -164,8 +164,8 @@ void main() {
       final mock = MockClient((request) async {
         expect(request.url.path, '/api/v1/devices/me/identify');
         expect(request.headers['authorization'], 'Bearer dt_token');
+        // app_id is derived server-side from the device — not sent.
         expect(jsonDecode(request.body), {
-          'app_id': 'app-uuid',
           'external_user_id': 'rc-user-1',
           'apns_environment': 'sandbox',
         });
