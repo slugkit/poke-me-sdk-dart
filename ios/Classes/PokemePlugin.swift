@@ -10,6 +10,12 @@ public class PokemePlugin: NSObject, FlutterPlugin {
     private var messageStreamHandler: MessageStreamHandler?
     private var pendingTokenResult: FlutterResult?
 
+    /// Last APNs token from `didRegister`. iOS does not always re-fire the
+    /// callback on a second `registerForRemoteNotifications()` in the same
+    /// session, so we return this cached value instead of waiting (and timing
+    /// out) — refreshed whenever the OS issues a new token.
+    private var cachedDeviceToken: String?
+
     public static func register(with registrar: FlutterPluginRegistrar) {
         let instance = PokemePlugin()
 
@@ -51,9 +57,37 @@ public class PokemePlugin: NSObject, FlutterPlugin {
             requestToken(requestPermission: requestPermission, result: result)
         case "openSettings":
             openNotificationSettings(result: result)
+        case "getApnsEnvironment":
+            result(Self.detectApnsEnvironment())
         default:
             result(FlutterMethodNotImplemented)
         }
+    }
+
+    /// Reads the `aps-environment` entitlement from the embedded provisioning
+    /// profile so the Dart side need not guess. Returns `"sandbox"` /
+    /// `"production"`, or nil for App Store builds (no embedded profile) — the
+    /// caller then falls back to its configured value.
+    static func detectApnsEnvironment() -> String? {
+        guard
+            let path = Bundle.main.path(
+                forResource: "embedded", ofType: "mobileprovision"),
+            let raw = try? Data(contentsOf: URL(fileURLWithPath: path)),
+            let text = String(data: raw, encoding: .isoLatin1),
+            let start = text.range(of: "<?xml"),
+            let end = text.range(of: "</plist>")
+        else { return nil }
+
+        let plistText = String(text[start.lowerBound..<end.upperBound])
+        guard
+            let plistData = plistText.data(using: .isoLatin1),
+            let plist = try? PropertyListSerialization.propertyList(
+                from: plistData, options: [], format: nil) as? [String: Any],
+            let entitlements = plist["Entitlements"] as? [String: Any],
+            let aps = entitlements["aps-environment"] as? String
+        else { return nil }
+
+        return aps == "production" ? "production" : "sandbox"
     }
 
     private func openNotificationSettings(result: @escaping FlutterResult) {
@@ -105,7 +139,13 @@ public class PokemePlugin: NSObject, FlutterPlugin {
             DispatchQueue.main.async {
                 switch settings.authorizationStatus {
                 case .authorized, .provisional, .ephemeral:
-                    UIApplication.shared.registerForRemoteNotifications()
+                    if let cached = self.cachedDeviceToken {
+                        // Already have a token this session — return it without
+                        // waiting on a callback iOS may not re-fire.
+                        self.completePending(cached)
+                    } else {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
                 case .denied:
                     self.completePending(
                         FlutterError(
@@ -150,6 +190,7 @@ public class PokemePlugin: NSObject, FlutterPlugin {
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        cachedDeviceToken = token
         completePending(token)
         tokenStreamHandler?.send(token: token)
     }

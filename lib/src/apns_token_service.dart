@@ -3,6 +3,7 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/services.dart';
 
+import 'api/byoa_api_types.dart';
 import 'push_token_service.dart';
 
 const _channel = MethodChannel('io.pokeme.pokeme/push_token');
@@ -70,6 +71,23 @@ class ApnsTokenService implements PushTokenService {
       await _channel.invokeMethod('openSettings');
     } on PlatformException {
       // Not implemented on this platform — ignore.
+    }
+  }
+
+  @override
+  Future<ApnsEnvironment?> detectApnsEnvironment() async {
+    try {
+      final value = await _channel.invokeMethod<String>('getApnsEnvironment');
+      switch (value) {
+        case 'sandbox':
+          return ApnsEnvironment.sandbox;
+        case 'production':
+          return ApnsEnvironment.production;
+        default:
+          return null;
+      }
+    } on PlatformException {
+      return null;
     }
   }
 }

@@ -14,9 +14,20 @@ BYOA recoverability + observability (from the field report, poke-me-sdk-dart#8):
   optional per-call `apnsEnvironment` override.
 * **Diagnostic accessors** on `PokeMe`: `currentPushToken`, `deviceToken`,
   `deviceId`.
-* **`apnsEnvironment` docs warning** — do NOT gate on `kReleaseMode`; it's set
-  by the signing entitlement, not the build mode. (Native auto-detection and the
-  macOS delegate-chaining / iOS token-cache fixes land in a follow-up.)
+* **`apnsEnvironment` auto-detection** — when omitted from `PokeMe.init`, the
+  SDK reads `aps-environment` from the embedded provisioning profile on Apple
+  platforms (the signing entitlement, not `kReleaseMode`). Eliminates the
+  footgun; pass it explicitly only to override. Docstring/README warn against
+  gating on build mode.
+
+Native fixes (verify on a device — no native CI):
+
+* **iOS/macOS token caching** — `getToken` returns the cached APNs token on a
+  second call within a session instead of waiting on a `didRegister` callback
+  iOS doesn't reliably re-fire (was a 30s timeout).
+* **macOS notification-delegate chaining** — the plugin captures the previous
+  `UNUserNotificationCenter.delegate` and forwards `willPresent` / `didReceive`
+  to it, instead of clobbering other plugins (e.g. flutter_local_notifications).
 
 ## 0.4.0
 

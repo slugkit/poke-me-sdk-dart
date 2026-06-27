@@ -110,12 +110,15 @@ Set `pokemeLoggingEnabled = false` to silence the SDK's `dart:developer` output.
 
 ### APNs environment (read this on Apple)
 
-`apnsEnvironment` must match the **signing entitlement**, not the Dart build
-mode. Do **not** gate it on `kReleaseMode`: a `flutter run --release` to a
-development-signed device receives a **sandbox** token even though
-`kReleaseMode == true`. Passing `production` there makes every push fail with
-`BadDeviceToken`, after which the server cascade-revokes the device and pushes
-stop silently.
+Leave `apnsEnvironment` **null** and the SDK auto-detects it from the embedded
+provisioning profile (the signing entitlement) on Apple platforms. Pass it
+explicitly only to override.
+
+It must match the **signing entitlement**, not the Dart build mode. Do **not**
+gate it on `kReleaseMode`: a `flutter run --release` to a development-signed
+device receives a **sandbox** token even though `kReleaseMode == true`. Passing
+`production` there makes every push fail with `BadDeviceToken`, after which the
+server cascade-revokes the device and pushes stop silently.
 
 ### Recovery & diagnostics
 

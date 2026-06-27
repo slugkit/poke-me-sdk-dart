@@ -11,6 +11,14 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
     private var messageStreamHandler: MessageStreamHandler?
     private var pendingTokenResult: FlutterResult?
 
+    /// Last APNs token (see iOS plugin — avoids re-register round-trips).
+    private var cachedDeviceToken: String?
+
+    /// The notification-centre delegate that was installed before ours, so we
+    /// can forward calls we don't consume (e.g. flutter_local_notifications)
+    /// instead of clobbering it.
+    private weak var previousNotificationDelegate: UNUserNotificationCenterDelegate?
+
     /// Shared instance so the AppDelegate can forward token callbacks.
     public static var shared: PokemePlugin?
 
@@ -45,8 +53,11 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         messageChannel.setStreamHandler(messageStreamHandler)
         instance.messageChannel = messageChannel
 
-        // Set ourselves as the notification centre delegate — required on macOS
-        // for the authorisation dialog to appear.
+        // Become the notification-centre delegate (required on macOS for the
+        // auth dialog), but chain to whoever was there before so we don't break
+        // other plugins (e.g. flutter_local_notifications) — and vice-versa.
+        instance.previousNotificationDelegate =
+            UNUserNotificationCenter.current().delegate
         UNUserNotificationCenter.current().delegate = instance
 
         // Unlike iOS, macOS Flutter does not relay the APNs registration
@@ -112,9 +123,37 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
             requestToken(requestPermission: requestPermission, result: result)
         case "openSettings":
             openNotificationSettings(result: result)
+        case "getApnsEnvironment":
+            result(Self.detectApnsEnvironment())
         default:
             result(FlutterMethodNotImplemented)
         }
+    }
+
+    /// Reads the `aps-environment` entitlement from the embedded provisioning
+    /// profile (macOS: `Contents/embedded.provisionprofile`). Returns
+    /// `"sandbox"` / `"production"`, or nil when there is no embedded profile
+    /// (App Store builds) — the caller then falls back to its configured value.
+    static func detectApnsEnvironment() -> String? {
+        guard
+            let path = Bundle.main.path(
+                forResource: "embedded", ofType: "provisionprofile"),
+            let raw = try? Data(contentsOf: URL(fileURLWithPath: path)),
+            let text = String(data: raw, encoding: .isoLatin1),
+            let start = text.range(of: "<?xml"),
+            let end = text.range(of: "</plist>")
+        else { return nil }
+
+        let plistText = String(text[start.lowerBound..<end.upperBound])
+        guard
+            let plistData = plistText.data(using: .isoLatin1),
+            let plist = try? PropertyListSerialization.propertyList(
+                from: plistData, options: [], format: nil) as? [String: Any],
+            let entitlements = plist["Entitlements"] as? [String: Any],
+            let aps = entitlements["aps-environment"] as? String
+        else { return nil }
+
+        return aps == "production" ? "production" : "sandbox"
     }
 
     private func openNotificationSettings(result: @escaping FlutterResult) {
@@ -139,8 +178,11 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
             DispatchQueue.main.async {
                 switch settings.authorizationStatus {
                 case .authorized, .provisional, .ephemeral:
-                    // Already authorised — go straight to registration.
-                    NSApplication.shared.registerForRemoteNotifications()
+                    if let cached = self.cachedDeviceToken {
+                        self.completePending(cached)
+                    } else {
+                        NSApplication.shared.registerForRemoteNotifications()
+                    }
 
                 case .denied:
                     // Previously denied — can't show the dialog again.
@@ -226,6 +268,7 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
     /// Called by the AppDelegate when a device token is received.
     public func didRegisterForRemoteNotifications(deviceToken: Data) {
         let token = deviceToken.map { String(format: "%02x", $0) }.joined()
+        cachedDeviceToken = token
         completePending(token)
         tokenStreamHandler?.send(token: token)
     }
@@ -277,8 +320,20 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
+        // Always observe the payload …
         deliverRemoteNotification(userInfo: notification.request.content.userInfo)
-        completionHandler([.banner, .badge, .sound])
+        // … then let the previously-installed delegate decide presentation (and
+        // own the completion handler); only present ourselves if there is none.
+        if let prev = previousNotificationDelegate,
+            prev.responds(
+                to: #selector(UNUserNotificationCenterDelegate
+                    .userNotificationCenter(_:willPresent:withCompletionHandler:))) {
+            prev.userNotificationCenter?(
+                center, willPresent: notification,
+                withCompletionHandler: completionHandler)
+        } else {
+            completionHandler([.banner, .badge, .sound])
+        }
     }
 
     public func userNotificationCenter(
@@ -287,7 +342,16 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         deliverRemoteNotification(userInfo: response.notification.request.content.userInfo)
-        completionHandler()
+        if let prev = previousNotificationDelegate,
+            prev.responds(
+                to: #selector(UNUserNotificationCenterDelegate
+                    .userNotificationCenter(_:didReceive:withCompletionHandler:))) {
+            prev.userNotificationCenter?(
+                center, didReceive: response,
+                withCompletionHandler: completionHandler)
+        } else {
+            completionHandler()
+        }
     }
 }
 

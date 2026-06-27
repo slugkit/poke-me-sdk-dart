@@ -101,16 +101,17 @@ class PokeMe {
   /// web-safe). [tokenService], [httpClient], and [databaseFactory] are
   /// injection seams for testing.
   ///
-  /// **[apnsEnvironment] — read this.** It is the APNs environment of the token
-  /// this binary will receive, forwarded to `identify` on Apple platforms. Do
-  /// **NOT** gate it on Dart's `kReleaseMode` / `kDebugMode`: the environment is
-  /// determined by the *aps-environment entitlement the binary was signed with*,
-  /// not the compile mode. A `flutter run --release` to a development-signed
-  /// device gets a **sandbox** token even though `kReleaseMode == true`. Passing
-  /// `production` there makes every push fail with `BadDeviceToken`, after which
-  /// the server cascade-revokes the device and pushes stop silently. Mirror your
-  /// signing/entitlement, not your build mode. (Native auto-detection from the
-  /// provisioning profile is planned.)
+  /// **[apnsEnvironment]** — the APNs environment of the token this binary
+  /// receives, forwarded to `identify` on Apple platforms. When omitted, the
+  /// SDK **auto-detects** it from the embedded provisioning profile (the
+  /// signing entitlement — the correct source of truth), so most apps should
+  /// leave it null. Pass it explicitly only to override.
+  ///
+  /// Do **NOT** gate it on Dart's `kReleaseMode` / `kDebugMode`: a
+  /// `flutter run --release` to a development-signed device gets a **sandbox**
+  /// token even though `kReleaseMode == true`. Passing `production` there makes
+  /// every push fail with `BadDeviceToken`, after which the server
+  /// cascade-revokes the device and pushes stop silently.
   static Future<PokeMe> init({
     required Uri baseUrl,
     required String appId,
@@ -127,15 +128,20 @@ class PokeMe {
       path: storePath,
       databaseFactory: databaseFactory,
     );
+    final resolvedTokenService = tokenService ?? PushTokenService();
+    // Prefer the explicit value; otherwise auto-detect from the signing
+    // entitlement (the correct source of truth — see the docstring above).
+    final resolvedApnsEnvironment =
+        apnsEnvironment ?? await resolvedTokenService.detectApnsEnvironment();
     final api = PokeApiClient(baseUrl: baseUrl, httpClient: httpClient);
     final identity = IdentityClient(
-      tokenService: tokenService ?? PushTokenService(),
+      tokenService: resolvedTokenService,
       apiClient: api,
       store: store,
       platform: platform,
       appId: appId,
       clientKey: clientKey,
-      apnsEnvironment: apnsEnvironment,
+      apnsEnvironment: resolvedApnsEnvironment,
     );
     final pushService = PushService(source: pushSource)..start();
     return PokeMe._(
