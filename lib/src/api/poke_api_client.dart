@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../log.dart';
 import 'api_exception.dart';
 import 'api_types.dart';
 import 'byoa_api_types.dart';
@@ -292,15 +293,18 @@ class PokeApiClient {
       final streamed = await _client.send(request).timeout(timeout);
       response = await http.Response.fromStream(streamed);
     } on TimeoutException catch (e) {
-      throw PokeApiException(
+      final ex = PokeApiException(
         message: 'Request timed out after ${timeout.inSeconds}s',
         cause: e,
       );
+      pokeLog('$method $uri — ${ex.message}',
+          error: ex, level: PokeLogLevel.error);
+      throw ex;
     } catch (e) {
-      throw PokeApiException(
-        message: 'Network error: $e',
-        cause: e,
-      );
+      final ex = PokeApiException(message: 'Network error: $e', cause: e);
+      pokeLog('$method $uri — ${ex.message}',
+          error: ex, level: PokeLogLevel.error);
+      throw ex;
     }
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
@@ -320,7 +324,13 @@ class PokeApiClient {
       }
     }
 
-    throw _decodeError(response);
+    final ex = _decodeError(response);
+    pokeLog(
+      '$method ${uri.path} → HTTP ${response.statusCode}: ${ex.detail ?? ex.message}',
+      error: ex,
+      level: PokeLogLevel.error,
+    );
+    throw ex;
   }
 
   PokeApiException _decodeError(http.Response response) {

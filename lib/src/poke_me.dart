@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:http/http.dart' as http;
 import 'package:sqflite/sqflite.dart' show DatabaseFactory;
 
@@ -5,6 +7,7 @@ import 'api/api_types.dart';
 import 'api/byoa_api_types.dart';
 import 'api/poke_api_client.dart';
 import 'identity/identity_client.dart';
+import 'poke_error.dart';
 import 'push_token_service.dart';
 import 'receiver/push_payload.dart';
 import 'receiver/push_service.dart';
@@ -44,6 +47,8 @@ class PokeMe {
   final PokeApiClient _api;
   final MessageStore _store;
   final PushService _pushService;
+  final StreamController<PokeError> _errors =
+      StreamController<PokeError>.broadcast();
 
   /// The identity orchestrator (register / identify / unidentify / refresh).
   IdentityClient get identity => _identity;
@@ -62,6 +67,22 @@ class PokeMe {
   /// For a BYOA app, subject-origin alerts arrive as [AlertPayload]s carrying
   /// the addressed [AlertPayload.externalUserId].
   Stream<PushPayload> get pushes => _pushService.pushes;
+
+  /// Broadcast stream of operation failures ([registerOnLaunch] / [identify] /
+  /// [unidentify] / [refreshPushToken]).
+  ///
+  /// Each of those operations still **throws** (so awaiting callers handle
+  /// errors inline), but it *also* emits a [PokeError] here — so failures from
+  /// **fire-and-forget** calls (e.g. `unawaited(poke.registerOnLaunch(...))`)
+  /// don't vanish. Wire this once to route errors to your telemetry:
+  ///
+  /// ```dart
+  /// poke.errors.listen((e) => Sentry.captureException(e.error));
+  /// ```
+  ///
+  /// Service errors are also logged via `dart:developer` under the `pokeme`
+  /// name (toggle with `pokemeLoggingEnabled`).
+  Stream<PokeError> get errors => _errors.stream;
 
   /// Builds and wires a [PokeMe] instance.
   ///
@@ -104,25 +125,49 @@ class PokeMe {
     );
   }
 
-  /// See [IdentityClient.registerOnLaunch].
+  /// See [IdentityClient.registerOnLaunch]. Failures throw and are also emitted
+  /// on [errors].
   Future<void> registerOnLaunch({bool requestPermission = true}) =>
-      _identity.registerOnLaunch(requestPermission: requestPermission);
+      _guard('registerOnLaunch',
+          () => _identity.registerOnLaunch(requestPermission: requestPermission));
 
-  /// See [IdentityClient.identify].
+  /// See [IdentityClient.identify]. Failures throw and are also emitted on
+  /// [errors].
   Future<String> identify(String externalUserId) =>
-      _identity.identify(externalUserId);
+      _guard('identify', () => _identity.identify(externalUserId));
 
-  /// See [IdentityClient.unidentify].
-  Future<void> unidentify() => _identity.unidentify();
+  /// See [IdentityClient.unidentify]. Failures throw and are also emitted on
+  /// [errors].
+  Future<void> unidentify() =>
+      _guard('unidentify', () => _identity.unidentify());
 
-  /// See [IdentityClient.refreshPushToken].
+  /// See [IdentityClient.refreshPushToken]. Failures throw and are also emitted
+  /// on [errors].
   Future<void> refreshPushToken(PushTokenResult pushToken) =>
-      _identity.refreshPushToken(pushToken);
+      _guard('refreshPushToken', () => _identity.refreshPushToken(pushToken));
 
-  /// Closes the push stream, the HTTP client, and the local store. The
-  /// instance must not be used afterwards.
+  /// Runs [body], emitting any error on [errors] (so fire-and-forget callers
+  /// still see it) before rethrowing for awaiting callers.
+  Future<T> _guard<T>(String operation, Future<T> Function() body) async {
+    try {
+      return await body();
+    } catch (error, stackTrace) {
+      if (!_errors.isClosed) {
+        _errors.add(PokeError(
+          operation: operation,
+          error: error,
+          stackTrace: stackTrace,
+        ));
+      }
+      rethrow;
+    }
+  }
+
+  /// Closes the push and error streams, the HTTP client, and the local store.
+  /// The instance must not be used afterwards.
   Future<void> close() async {
     await _pushService.dispose();
+    await _errors.close();
     _api.close();
     await _store.close();
   }

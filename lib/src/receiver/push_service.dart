@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import '../log.dart';
 import 'push_message_channel.dart';
 import 'push_payload.dart';
 
@@ -42,8 +43,10 @@ class PushService {
     final PushPayload payload;
     try {
       payload = parsePushPayload(raw);
-    } on FormatException {
-      // Not a conformant poke-me push — drop silently.
+    } on FormatException catch (e) {
+      // Not a conformant poke-me push — drop, but log so it isn't invisible.
+      pokeLog('dropped non-conformant push payload: ${e.message}',
+          error: e, level: PokeLogLevel.warning);
       return;
     }
     if (!_controller.isClosed) _controller.add(payload);
