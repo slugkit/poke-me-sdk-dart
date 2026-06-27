@@ -1,3 +1,16 @@
+## 0.3.0
+
+* **Service errors no longer vanish.** Previously the SDK threw rich
+  `PokeApiException`s on 4xx/5xx but logged nothing, so fire-and-forget calls
+  (`unawaited(poke.registerOnLaunch(...))`) lost the error entirely. Now:
+  * Every HTTP/transport failure is **logged** via `dart:developer` under the
+    `pokeme` name (method, path, status, detail). Toggle with
+    `pokemeLoggingEnabled`; dropped non-conformant pushes are logged too.
+  * `PokeMe.errors` — a broadcast `Stream<PokeError>` that surfaces failures
+    from `registerOnLaunch` / `identify` / `unidentify` / `refreshPushToken`
+    **even when fire-and-forget**. Operations still throw for awaiting callers;
+    wire `poke.errors.listen(...)` to route them to your telemetry.
+
 ## 0.2.1
 
 * **Fix macOS hang on `registerOnLaunch` / `getToken`** (#3). macOS Flutter does

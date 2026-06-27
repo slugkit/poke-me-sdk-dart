@@ -84,6 +84,30 @@ no-op — the device stays unregistered until the contextual call. (On Android
 fetching the token never prompts, so the flag has no effect there; requesting
 `POST_NOTIFICATIONS` on Android 13+ is the host app's responsibility.)
 
+### Error handling
+
+Every operation throws a rich `PokeApiException` on failure (`statusCode`,
+`isClientError`, `isServerError`, `isTransportError`, `detail`). Errors are also
+**logged** via `dart:developer` under the `pokeme` name, and **surfaced on a
+stream** so fire-and-forget calls don't vanish:
+
+```dart
+poke.errors.listen((e) {
+  // e.operation: 'registerOnLaunch' | 'identify' | …
+  // e.error: PokeApiException(statusCode: 404, …)
+  reportToTelemetry(e.error);
+});
+
+// still throws for awaiting callers:
+try {
+  await poke.identify(userId);
+} on PokeApiException catch (e) {
+  if (e.isServerError) scheduleRetry();
+}
+```
+
+Set `pokemeLoggingEnabled = false` to silence the SDK's `dart:developer` output.
+
 ## Two import surfaces
 
 ```dart

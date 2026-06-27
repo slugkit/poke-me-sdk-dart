@@ -33,4 +33,7 @@ export 'src/api/poke_api_client.dart';
 
 export 'src/identity/identity_client.dart';
 
+export 'src/poke_error.dart';
+export 'src/log.dart' show pokemeLoggingEnabled, PokeLogLevel;
+
 export 'src/poke_me.dart';
