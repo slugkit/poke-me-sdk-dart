@@ -168,11 +168,41 @@ Already configured in this project:
 - `macos/Runner/DebugProfile.entitlements` — `aps-environment: development`
 - `macos/Runner/Release.entitlements` — `aps-environment: production`
 
-### 3. Signing
+### 3. APNs callback delivery
+
+macOS Flutter (unlike iOS) does **not** relay the APNs registration callback
+(`application(_:didRegisterForRemoteNotificationsWithDeviceToken:)`) to plugins,
+so the SDK installs the forwarding itself by swizzling the host
+`NSApplicationDelegate` at startup. **No host AppDelegate code is required.**
+
+If your app uses a non-standard app-delegate setup and the device token still
+isn't delivered, forward it manually instead (the plugin exposes a public
+shared instance):
+
+```swift
+// macos/Runner/AppDelegate.swift
+override func application(
+  _ application: NSApplication,
+  didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+) {
+  PokemePlugin.shared?.didRegisterForRemoteNotifications(deviceToken: deviceToken)
+}
+override func application(
+  _ application: NSApplication,
+  didFailToRegisterForRemoteNotificationsWithError error: Error
+) {
+  PokemePlugin.shared?.didFailToRegisterForRemoteNotifications(error: error)
+}
+```
+
+`getToken()` times out (30s) with a clear error rather than hanging if the
+callback never arrives.
+
+### 4. Signing
 
 macOS apps must be signed to receive push notifications, even during development. Ensure your Apple Developer team is configured in Xcode.
 
-### 4. Verify
+### 5. Verify
 
 ```bash
 cd mobile && flutter run -d macos
