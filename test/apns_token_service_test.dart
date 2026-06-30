@@ -77,6 +77,14 @@ void main() {
       });
       expect(await ApnsTokenService().detectApnsEnvironment(), isNull);
     });
+
+    test('returns null on a MissingPluginException (method not wired)',
+        () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw MissingPluginException('no impl');
+      });
+      expect(await ApnsTokenService().detectApnsEnvironment(), isNull);
+    });
   });
 
   group('configureAndroidNotifications', () {
@@ -94,6 +102,17 @@ void main() {
     test('swallows a PlatformException (non-Android platforms)', () async {
       messenger.setMockMethodCallHandler(channel, (call) async {
         throw PlatformException(code: 'unimplemented');
+      });
+      // Should not throw.
+      await ApnsTokenService().configureAndroidNotifications(autoDisplay: true);
+    });
+
+    test('swallows a MissingPluginException (iOS/macOS — method not wired)',
+        () async {
+      // Regression for #14: MissingPluginException is NOT a PlatformException,
+      // so it must be caught explicitly or it escapes PokeMe.init.
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw MissingPluginException('no impl for configureAndroidNotifications');
       });
       // Should not throw.
       await ApnsTokenService().configureAndroidNotifications(autoDisplay: true);

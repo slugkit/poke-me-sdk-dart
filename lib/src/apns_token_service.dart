@@ -66,38 +66,40 @@ class ApnsTokenService implements PushTokenService {
   }
 
   @override
-  Future<void> openSettings() async {
-    try {
-      await _channel.invokeMethod('openSettings');
-    } on PlatformException {
-      // Not implemented on this platform — ignore.
-    }
-  }
+  Future<void> openSettings() => _maybeCall<void>('openSettings');
 
   @override
-  Future<void> configureAndroidNotifications({required bool autoDisplay}) async {
-    try {
-      await _channel.invokeMethod('configureAndroidNotifications', {
-        'autoDisplay': autoDisplay,
-      });
-    } on PlatformException {
-      // Not implemented on this platform — ignore.
-    }
-  }
+  Future<void> configureAndroidNotifications({required bool autoDisplay}) =>
+      _maybeCall<void>(
+        'configureAndroidNotifications',
+        {'autoDisplay': autoDisplay},
+      );
 
   @override
   Future<ApnsEnvironment?> detectApnsEnvironment() async {
+    final value = await _maybeCall<String>('getApnsEnvironment');
+    switch (value) {
+      case 'sandbox':
+        return ApnsEnvironment.sandbox;
+      case 'production':
+        return ApnsEnvironment.production;
+      default:
+        return null;
+    }
+  }
+
+  /// Invokes a platform method that may not exist on the current target (e.g.
+  /// Android-only notification config, Apple-only env detection). Returns null
+  /// and swallows both [PlatformException] **and** [MissingPluginException] —
+  /// the latter is *not* a subclass of the former, so it must be caught
+  /// explicitly. This keeps best-effort calls from leaking out of `PokeMe.init`
+  /// on platforms where the native side doesn't implement the method.
+  Future<T?> _maybeCall<T>(String method, [Map<String, dynamic>? args]) async {
     try {
-      final value = await _channel.invokeMethod<String>('getApnsEnvironment');
-      switch (value) {
-        case 'sandbox':
-          return ApnsEnvironment.sandbox;
-        case 'production':
-          return ApnsEnvironment.production;
-        default:
-          return null;
-      }
+      return await _channel.invokeMethod<T>(method, args);
     } on PlatformException {
+      return null;
+    } on MissingPluginException {
       return null;
     }
   }
