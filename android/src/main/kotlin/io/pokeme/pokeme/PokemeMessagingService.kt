@@ -21,5 +21,8 @@ class PokemeMessagingService : FirebaseMessagingService() {
             n.body?.let { payload.putIfAbsent("body", it) }
         }
         PokemePlugin.deliverMessage(payload)
+        // Android never auto-displays data-only messages, so render one here
+        // (unless the host opted out via PokeMe.init(androidAutoDisplay: false)).
+        PokemeNotifications.show(applicationContext, payload)
     }
 }

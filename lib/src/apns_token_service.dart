@@ -75,6 +75,17 @@ class ApnsTokenService implements PushTokenService {
   }
 
   @override
+  Future<void> configureAndroidNotifications({required bool autoDisplay}) async {
+    try {
+      await _channel.invokeMethod('configureAndroidNotifications', {
+        'autoDisplay': autoDisplay,
+      });
+    } on PlatformException {
+      // Not implemented on this platform — ignore.
+    }
+  }
+
+  @override
   Future<ApnsEnvironment?> detectApnsEnvironment() async {
     try {
       final value = await _channel.invokeMethod<String>('getApnsEnvironment');

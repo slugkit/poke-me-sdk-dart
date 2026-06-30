@@ -133,6 +133,16 @@ final status = await poke.ensureRegistered(); // re-registers if the server lost
 Diagnostic getters: `poke.currentPushToken`, `await poke.deviceToken`,
 `await poke.deviceId`.
 
+### Android notifications
+
+On Android the SDK posts the system notification itself (the backend sends
+data-only FCM, which Android never auto-displays — unlike APNs alerts on
+iOS/macOS). It creates a notification channel, and a tap relaunches the app with
+the payload as `pokeme_*` intent extras. Pass `androidAutoDisplay: false` to
+`PokeMe.init` if your app renders its own notifications from `pushes`. The
+plugin declares and requests `POST_NOTIFICATIONS` (Android 13+) during
+`registerOnLaunch`.
+
 ## Two import surfaces
 
 ```dart

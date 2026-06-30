@@ -70,6 +70,12 @@ abstract class PushTokenService {
   /// This reflects the **signing entitlement**, which is the correct source of
   /// truth — unlike Dart's `kReleaseMode`.
   Future<ApnsEnvironment?> detectApnsEnvironment();
+
+  /// Configures Android system-notification rendering. When [autoDisplay] is
+  /// true (default), the SDK posts a notification for incoming pushes (Android
+  /// never auto-displays the data-only messages the backend sends). No-op on
+  /// non-Android platforms.
+  Future<void> configureAndroidNotifications({required bool autoDisplay});
 }
 
 /// Thrown when push token retrieval fails.

@@ -11,6 +11,9 @@ class _FakeToken implements PushTokenService {
 
   final ApnsEnvironment? detectedEnv;
 
+  /// Records the value [configureAndroidNotifications] was last called with.
+  bool? configuredAutoDisplay;
+
   @override
   Future<PushTokenResult> getToken({bool requestPermission = true}) async =>
       PushTokenResult(type: PushTokenType.apns, token: 'tok');
@@ -23,6 +26,11 @@ class _FakeToken implements PushTokenService {
 
   @override
   Future<ApnsEnvironment?> detectApnsEnvironment() async => detectedEnv;
+
+  @override
+  Future<void> configureAndroidNotifications({required bool autoDisplay}) async {
+    configuredAutoDisplay = autoDisplay;
+  }
 }
 
 void main() {
@@ -61,6 +69,25 @@ void main() {
     await poke.identify('u1');
 
     expect(bodies.single['apns_environment'], 'sandbox');
+    await poke.close();
+  });
+
+  test('init forwards androidAutoDisplay to the platform', () async {
+    final token = _FakeToken();
+    final mock = MockClient((_) async => http.Response('{}', 200));
+    final poke = await PokeMe.init(
+      baseUrl: Uri.parse('http://localhost'),
+      appId: 'a',
+      clientKey: 'ck',
+      platform: DevicePlatform.android,
+      storePath: inMemoryDatabasePath,
+      androidAutoDisplay: false,
+      tokenService: token,
+      httpClient: mock,
+      databaseFactory: databaseFactoryFfi,
+      pushSource: const Stream<Map<String, dynamic>>.empty(),
+    );
+    expect(token.configuredAutoDisplay, isFalse);
     await poke.close();
   });
 

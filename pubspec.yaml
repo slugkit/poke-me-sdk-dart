@@ -1,6 +1,6 @@
 name: pokeme
 description: "Flutter client SDK for the poke-me push notification service — BYOA identity/unicast and channel subscriptions."
-version: 0.5.1
+version: 0.5.2
 publish_to: 'none'
 repository: https://github.com/slugkit/poke-me-sdk-dart
 homepage: https://github.com/slugkit/poke-me-sdk-dart

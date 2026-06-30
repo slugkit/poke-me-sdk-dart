@@ -112,6 +112,11 @@ class PokeMe {
   /// token even though `kReleaseMode == true`. Passing `production` there makes
   /// every push fail with `BadDeviceToken`, after which the server
   /// cascade-revokes the device and pushes stop silently.
+  ///
+  /// **[androidAutoDisplay]** — on Android the SDK posts a system notification
+  /// for incoming pushes itself (the backend sends data-only FCM, which Android
+  /// never auto-displays — unlike APNs alerts on iOS/macOS). Set to false if
+  /// your app renders its own notifications from [pushes]. No effect off Android.
   static Future<PokeMe> init({
     required Uri baseUrl,
     required String appId,
@@ -119,6 +124,7 @@ class PokeMe {
     required DevicePlatform platform,
     required String storePath,
     ApnsEnvironment? apnsEnvironment,
+    bool androidAutoDisplay = true,
     PushTokenService? tokenService,
     http.Client? httpClient,
     DatabaseFactory? databaseFactory,
@@ -133,6 +139,11 @@ class PokeMe {
     // entitlement (the correct source of truth — see the docstring above).
     final resolvedApnsEnvironment =
         apnsEnvironment ?? await resolvedTokenService.detectApnsEnvironment();
+    // Android renders system notifications itself (the backend sends data-only
+    // FCM, which the OS never auto-displays). No-op on other platforms.
+    await resolvedTokenService.configureAndroidNotifications(
+      autoDisplay: androidAutoDisplay,
+    );
     final api = PokeApiClient(baseUrl: baseUrl, httpClient: httpClient);
     final identity = IdentityClient(
       tokenService: resolvedTokenService,
