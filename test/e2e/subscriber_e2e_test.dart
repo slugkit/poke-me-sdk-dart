@@ -47,6 +47,9 @@ class _FakePushTokenService implements PushTokenService {
 
   @override
   Future<ApnsEnvironment?> detectApnsEnvironment() async => null;
+
+  @override
+  Future<void> configureAndroidNotifications({required bool autoDisplay}) async {}
 }
 
 void main() {

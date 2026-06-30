@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
   package="io.pokeme.pokeme">
+  <!-- Android 13+: required to display notifications. Requested at runtime by
+       the plugin during getToken. -->
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
   <application>
     <!-- Receives FCM messages and forwards them to the SDK. Merged into the
          host app manifest; no host wiring required. -->

@@ -1,12 +1,16 @@
 package io.pokeme.pokeme
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.google.firebase.messaging.FirebaseMessaging
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -16,15 +20,18 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import io.flutter.plugin.common.PluginRegistry
 
 class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
-    EventChannel.StreamHandler {
+    EventChannel.StreamHandler, PluginRegistry.RequestPermissionsResultListener {
 
     private lateinit var channel: MethodChannel
     private lateinit var eventChannel: EventChannel
     private lateinit var messageEventChannel: EventChannel
+    private var activityBinding: ActivityPluginBinding? = null
     private var activity: Activity? = null
     private var eventSink: EventChannel.EventSink? = null
+    private var pendingTokenResult: Result? = null
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         channel = MethodChannel(binding.binaryMessenger, "io.pokeme.pokeme/push_token")
@@ -42,13 +49,52 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
-            "getToken" -> getToken(result)
+            "getToken" -> getToken(call, result)
             "openSettings" -> openSettings(result)
+            "configureAndroidNotifications" -> {
+                val context = activity?.applicationContext
+                if (context != null) {
+                    PokemeNotifications.setConfig(
+                        context,
+                        autoDisplay = call.argument<Boolean>("autoDisplay") ?: true,
+                        channelId = call.argument<String>("channelId"),
+                        channelName = call.argument<String>("channelName"),
+                    )
+                }
+                result.success(null)
+            }
             else -> result.notImplemented()
         }
     }
 
-    private fun getToken(result: Result) {
+    private fun getToken(call: MethodCall, result: Result) {
+        val activity = this.activity ?: run {
+            result.error("NO_ACTIVITY", "No activity available", null)
+            return
+        }
+        val requestPermission = call.argument<Boolean>("requestPermission") ?: true
+
+        // Android 13+ gates notification display behind the POST_NOTIFICATIONS
+        // runtime permission. Request it (when allowed to prompt) before
+        // fetching the token; older versions need no runtime grant.
+        if (requestPermission &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(activity, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingTokenResult = result
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                POST_NOTIFICATIONS_REQUEST,
+            )
+            return
+        }
+
+        fetchToken(result)
+    }
+
+    private fun fetchToken(result: Result) {
         val context = activity ?: run {
             result.error("NO_ACTIVITY", "No activity available", null)
             return
@@ -82,6 +128,28 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
                     null
                 )
             }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ): Boolean {
+        if (requestCode != POST_NOTIFICATIONS_REQUEST) return false
+        val result = pendingTokenResult ?: return true
+        pendingTokenResult = null
+        if (grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
+            fetchToken(result)
+        } else {
+            result.error(
+                "PERMISSION_DENIED",
+                "Notification permission denied.",
+                null
+            )
+        }
+        return true
     }
 
     private fun openSettings(result: Result) {
@@ -132,6 +200,7 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
     }
 
     companion object {
+        private const val POST_NOTIFICATIONS_REQUEST = 7001
         private val mainHandler = Handler(Looper.getMainLooper())
         private val lock = Any()
         private var messageSink: EventChannel.EventSink? = null
@@ -167,18 +236,30 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     // ActivityAware
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-        activity = binding.activity
+        bindActivity(binding)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
-        activity = null
+        unbindActivity()
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-        activity = binding.activity
+        bindActivity(binding)
     }
 
     override fun onDetachedFromActivity() {
+        unbindActivity()
+    }
+
+    private fun bindActivity(binding: ActivityPluginBinding) {
+        activityBinding = binding
+        activity = binding.activity
+        binding.addRequestPermissionsResultListener(this)
+    }
+
+    private fun unbindActivity() {
+        activityBinding?.removeRequestPermissionsResultListener(this)
+        activityBinding = null
         activity = null
     }
 }

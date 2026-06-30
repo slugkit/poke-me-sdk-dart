@@ -78,4 +78,25 @@ void main() {
       expect(await ApnsTokenService().detectApnsEnvironment(), isNull);
     });
   });
+
+  group('configureAndroidNotifications', () {
+    test('forwards autoDisplay to the native side', () async {
+      Object? args;
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'configureAndroidNotifications');
+        args = call.arguments;
+        return null;
+      });
+      await ApnsTokenService().configureAndroidNotifications(autoDisplay: false);
+      expect((args as Map)['autoDisplay'], isFalse);
+    });
+
+    test('swallows a PlatformException (non-Android platforms)', () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(code: 'unimplemented');
+      });
+      // Should not throw.
+      await ApnsTokenService().configureAndroidNotifications(autoDisplay: true);
+    });
+  });
 }

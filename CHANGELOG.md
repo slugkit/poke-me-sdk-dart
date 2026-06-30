@@ -1,3 +1,20 @@
+## 0.5.2
+
+Completes cross-platform notification display (after the iOS foreground fix in
+v0.5.1; macOS already did it).
+
+* **Android: incoming pushes now show a system notification** (#12). The backend
+  sends data-only FCM (which Android never auto-displays), and the SDK
+  previously only forwarded the payload — so nothing appeared. It now posts a
+  `NotificationCompat` itself (parity with iOS/macOS): creates a channel, maps
+  title/body/priority, and a tap relaunches the app with the payload as
+  `pokeme_*` intent extras. Opt out with `PokeMe.init(androidAutoDisplay: false)`
+  if your app renders its own notifications from `pushes`.
+* **Android 13+ `POST_NOTIFICATIONS`** is now declared in the (merged) manifest
+  and requested at runtime during `getToken`.
+
+⚠️ Native Android — verify on a device (no native CI).
+
 ## 0.5.1
 
 * **iOS: foreground pushes now present a banner** (#10). The plugin installs
