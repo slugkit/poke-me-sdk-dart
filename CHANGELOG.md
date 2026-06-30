@@ -1,3 +1,14 @@
+## 0.5.3
+
+* **Fix `PokeMe.init` throwing `MissingPluginException` on iOS/macOS** (#14).
+  `configureAndroidNotifications` (v0.5.2) caught only `PlatformException`, but a
+  channel method with no native implementation raises `MissingPluginException` —
+  which is *not* a subclass — so it escaped `init`. The same latent bug applied
+  to `detectApnsEnvironment` on Android. All best-effort channel calls
+  (`configureAndroidNotifications`, `detectApnsEnvironment`, `openSettings`) now
+  route through one `_maybeCall` helper that swallows both, so a method present
+  on only one platform can never break `init`.
+
 ## 0.5.2
 
 Completes cross-platform notification display (after the iOS foreground fix in
