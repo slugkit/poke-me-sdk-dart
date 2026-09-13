@@ -8,6 +8,7 @@ import 'api_exception.dart';
 import 'api_types.dart';
 import 'byoa_api_types.dart';
 import 'channel_api_types.dart';
+import 'receipt_api_types.dart';
 
 /// HTTP client for the poke-me backend's device-facing endpoints.
 ///
@@ -212,6 +213,29 @@ class PokeApiClient {
       deviceToken: deviceToken,
       body: request.toJson(),
     );
+  }
+
+  /// `POST /api/v1/devices/me/receipts` — report what became of notifications
+  /// this device was sent.
+  ///
+  /// Up to 64 per call; the backend refuses a larger batch rather than
+  /// truncating it. Idempotent per (notification, state), so a retry after a
+  /// timeout is free — which is why the SDK retries once and then drops rather
+  /// than keeping a durable queue.
+  ///
+  /// A `receipts_enabled: false` response is **success**: the publisher's plan
+  /// does not include receipts, and the caller should stop reporting rather
+  /// than retry. See [ReportReceiptsResponse.receiptsEnabled].
+  Future<ReportReceiptsResponse> reportReceipts({
+    required String deviceToken,
+    required List<Receipt> receipts,
+  }) async {
+    final body = await _post(
+      path: '/api/v1/devices/me/receipts',
+      deviceToken: deviceToken,
+      body: {'receipts': receipts.map((r) => r.toJson()).toList()},
+    );
+    return ReportReceiptsResponse.fromJson(body);
   }
 
   /// `DELETE /api/v1/devices/me/subscriptions/{sub_ref}` — unsubscribe

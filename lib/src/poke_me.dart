@@ -6,9 +6,11 @@ import 'package:sqflite/sqflite.dart' show DatabaseFactory;
 import 'api/api_types.dart';
 import 'api/byoa_api_types.dart';
 import 'api/poke_api_client.dart';
+import 'api/receipt_api_types.dart';
 import 'identity/identity_client.dart';
 import 'poke_error.dart';
 import 'push_token_service.dart';
+import 'receipts/receipt_reporter.dart';
 import 'receiver/push_payload.dart';
 import 'receiver/push_service.dart';
 import 'store/message_store.dart';
@@ -38,15 +40,18 @@ class PokeMe {
     required PokeApiClient api,
     required MessageStore store,
     required PushService pushService,
+    required ReceiptReporter? receipts,
   })  : _identity = identity,
         _api = api,
         _store = store,
-        _pushService = pushService;
+        _pushService = pushService,
+        _receipts = receipts;
 
   final IdentityClient _identity;
   final PokeApiClient _api;
   final MessageStore _store;
   final PushService _pushService;
+  final ReceiptReporter? _receipts;
   final StreamController<PokeError> _errors =
       StreamController<PokeError>.broadcast();
 
@@ -78,6 +83,11 @@ class PokeMe {
   /// For a BYOA app, subject-origin alerts arrive as [AlertPayload]s carrying
   /// the addressed [AlertPayload.externalUserId].
   Stream<PushPayload> get pushes => _pushService.pushes;
+
+  /// The delivery-receipt reporter, or null when receipts are off
+  /// (`PokeMe.init(reportReceipts: false)`). Diagnostic — [reportShown],
+  /// [reportOpened] and [flushReceipts] are the surface to use.
+  ReceiptReporter? get receipts => _receipts;
 
   /// Broadcast stream of operation failures ([registerOnLaunch] / [identify] /
   /// [unidentify] / [refreshPushToken]).
@@ -117,6 +127,15 @@ class PokeMe {
   /// for incoming pushes itself (the backend sends data-only FCM, which Android
   /// never auto-displays — unlike APNs alerts on iOS/macOS). Set to false if
   /// your app renders its own notifications from [pushes]. No effect off Android.
+  ///
+  /// **[reportReceipts]** — tell poke-me what became of each notification
+  /// (delivered / shown / opened). Nothing else can: APNs and Web Push have no
+  /// receipts, and FCM's live in your own Firebase project. Reports are
+  /// batched, debounced and dropped after one failed retry, so the cost is one
+  /// small request per app-resume rather than one per notification. Set to
+  /// false to send none. Note that receipts are a paid poke-me feature — if
+  /// your plan does not include them the backend says so and the SDK stops
+  /// reporting on its own, so leaving this on costs nothing either way.
   static Future<PokeMe> init({
     required Uri baseUrl,
     required String appId,
@@ -125,6 +144,7 @@ class PokeMe {
     required String storePath,
     ApnsEnvironment? apnsEnvironment,
     bool androidAutoDisplay = true,
+    bool reportReceipts = true,
     PushTokenService? tokenService,
     http.Client? httpClient,
     DatabaseFactory? databaseFactory,
@@ -154,12 +174,19 @@ class PokeMe {
       clientKey: clientKey,
       apnsEnvironment: resolvedApnsEnvironment,
     );
-    final pushService = PushService(source: pushSource)..start();
+    final reporter = reportReceipts
+        ? ReceiptReporter(api: api, deviceToken: store.getDeviceToken)
+        : null;
+    final pushService = PushService(
+      source: pushSource,
+      onObserved: reporter?.report,
+    )..start();
     return PokeMe._(
       identity: identity,
       api: api,
       store: store,
       pushService: pushService,
+      receipts: reporter,
     );
   }
 
@@ -210,9 +237,42 @@ class PokeMe {
     }
   }
 
+  /// Reports that the OS displayed a notification, by its [PushPayload.id].
+  ///
+  /// Call it only if your app renders notifications itself (Android with
+  /// `androidAutoDisplay: false`, or a custom in-app presentation). When the
+  /// SDK does the rendering it reports this for you.
+  ///
+  /// Buffered and sent with the next flush; never throws.
+  void reportShown(String notificationId) =>
+      _receipts?.report(notificationId, ReceiptState.shown);
+
+  /// Reports that the user acted on a notification, by its [PushPayload.id].
+  ///
+  /// The SDK reports this itself for notifications it rendered. Call it from
+  /// your own tap handler when your app owns the presentation, or for an
+  /// in-app surface the OS knows nothing about.
+  ///
+  /// Buffered and sent with the next flush; never throws.
+  void reportOpened(String notificationId) =>
+      _receipts?.report(notificationId, ReceiptState.opened);
+
+  /// Sends buffered receipts now rather than waiting out the debounce.
+  ///
+  /// Worth calling when the app goes to the background — that is the moment the
+  /// buffer is most likely to be lost. Never throws.
+  Future<void> flushReceipts() async {
+    try {
+      await _receipts?.flush();
+    } catch (_) {
+      // Telemetry must not be able to fail a lifecycle callback.
+    }
+  }
+
   /// Closes the push and error streams, the HTTP client, and the local store.
   /// The instance must not be used afterwards.
   Future<void> close() async {
+    await _receipts?.close();
     await _pushService.dispose();
     await _errors.close();
     _api.close();

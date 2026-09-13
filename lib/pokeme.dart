@@ -29,7 +29,10 @@ export 'src/receiver/push_service.dart';
 export 'src/api/api_exception.dart';
 export 'src/api/api_types.dart';
 export 'src/api/byoa_api_types.dart';
+export 'src/api/receipt_api_types.dart';
 export 'src/api/poke_api_client.dart';
+
+export 'src/receipts/receipt_reporter.dart';
 
 export 'src/identity/identity_client.dart';
 

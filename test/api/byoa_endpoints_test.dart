@@ -198,4 +198,62 @@ void main() {
       expect(await buildClient(mock).fetchDevicePushToken('dt'), isNull);
     });
   });
+
+  group('reportReceipts', () {
+    test('sends the batch under the device token', () async {
+      final mock = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, '/api/v1/devices/me/receipts');
+        expect(request.headers['authorization'], 'Bearer dt_mine');
+        expect(jsonDecode(request.body), {
+          'receipts': [
+            {
+              'notification_id': '019d-a',
+              'state': 'opened',
+              'at': 1757577243120,
+            }
+          ],
+        });
+        return http.Response(
+          jsonEncode({'recorded': 1, 'ignored': 0, 'receipts_enabled': true}),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final response = await buildClient(mock).reportReceipts(
+        deviceToken: 'dt_mine',
+        receipts: [
+          Receipt(
+            notificationId: '019d-a',
+            state: ReceiptState.opened,
+            at: DateTime.fromMillisecondsSinceEpoch(1757577243120),
+          ),
+        ],
+      );
+
+      expect(response.recorded, 1);
+      expect(response.receiptsEnabled, isTrue);
+    });
+
+    test('an older backend that omits receipts_enabled is treated as enabled',
+        () async {
+      // Absent means enabled: a backend that has never heard of the flag is
+      // one where receipts work, and reading absence as "off" would silence
+      // the SDK against it for ever.
+      final mock = MockClient((_) async => http.Response(
+            jsonEncode({'recorded': 1, 'ignored': 0}),
+            200,
+            headers: {'content-type': 'application/json'},
+          ));
+
+      final response = await buildClient(mock).reportReceipts(
+        deviceToken: 'dt',
+        receipts: [
+          Receipt(notificationId: '019d-a', state: ReceiptState.delivered),
+        ],
+      );
+      expect(response.receiptsEnabled, isTrue);
+    });
+  });
 }

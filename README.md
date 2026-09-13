@@ -143,6 +143,54 @@ the payload as `pokeme_*` intent extras. Pass `androidAutoDisplay: false` to
 plugin declares and requests `POST_NOTIFICATIONS` (Android 13+) during
 `registerOnLaunch`.
 
+### Delivery receipts
+
+Nobody else can tell you whether a notification arrived. APNs and Web Push have
+no receipts at all, and FCM's live in your own Firebase project, hours behind
+and on the wrong side of the network. The device is the only party that knows —
+so the SDK reports.
+
+It is on by default and there is nothing to wire:
+
+| Receipt | Reported when |
+|---|---|
+| `delivered` | the push arrives and the SDK runs |
+| `shown` | the OS displays it — iOS/macOS foreground presentation, or an Android notification the SDK posted |
+| `opened` | the user taps it |
+
+Reports are buffered, coalesced by a short debounce, sent at most 64 to a
+request, retried once and then dropped. The cost is roughly one small request
+per app-resume, not one per notification.
+
+Call `flushReceipts()` when your app goes to the background — that is when the
+buffer is most likely to be lost:
+
+```dart
+if (state == AppLifecycleState.paused) {
+  unawaited(poke.flushReceipts());
+}
+```
+
+If your app renders its own notifications (`androidAutoDisplay: false`, or an
+in-app surface the OS knows nothing about), report those two yourself:
+
+```dart
+poke.reportShown(payload.id);
+poke.reportOpened(payload.id);   // from your tap handler
+```
+
+Neither throws, and both are no-ops when receipts are off.
+
+**What you cannot read into it.** A receipt that never arrives does **not** mean
+the notification failed. The device may be offline, the app may have been killed
+before it could report, notifications may be denied, or the OS may simply not
+have woken the app — iOS throttles silent pushes and under-reports by design.
+Receipts are positive evidence only.
+
+Receipts are a paid poke-me feature. If your plan does not include them the
+backend says so and the SDK stops reporting on its own, so leaving this on costs
+nothing either way. Pass `reportReceipts: false` to `PokeMe.init` to send none.
+
 ## Two import surfaces
 
 ```dart
