@@ -139,4 +139,118 @@ void main() {
       expect(done, isTrue);
     });
   });
+
+  /// The native layer tags each event with what it observed, so the SDK can
+  /// report a receipt without the host wiring anything. The rule that matters
+  /// is that the `pushes` stream keeps its old semantics exactly: a tap and a
+  /// display are not new pushes, and a consumer that saw the payload once must
+  /// not see it again.
+  group('PushService — receipt signals', () {
+    late StreamController<Map<String, dynamic>> source;
+    late List<({String id, ReceiptState state})> observed;
+
+    setUp(() {
+      source = StreamController<Map<String, dynamic>>.broadcast();
+      observed = [];
+    });
+
+    tearDown(() async {
+      if (!source.isClosed) await source.close();
+    });
+
+    PushService build() => PushService(
+          source: source.stream,
+          onObserved: (id, state) => observed.add((id: id, state: state)),
+        )..start();
+
+    test('an untagged payload is a delivery', () async {
+      // What every payload was before signals existed — an older native layer
+      // must keep working.
+      final service = build();
+      final received = <PushPayload>[];
+      service.pushes.listen(received.add);
+
+      source.add(_subjectAlert());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(observed, hasLength(1));
+      expect(observed.single.state, ReceiptState.delivered);
+      expect(received, hasLength(1), reason: 'the payload still reaches the host');
+    });
+
+    test('a tagged payload reports its tag and still reaches the host',
+        () async {
+      final service = build();
+      final received = <PushPayload>[];
+      service.pushes.listen(received.add);
+
+      source.add({..._subjectAlert(), PushService.signalKey: 'shown'});
+      await Future<void>.delayed(Duration.zero);
+
+      expect(observed.single.state, ReceiptState.shown);
+      expect(received, hasLength(1));
+    });
+
+    test('a bare signal reports and is not re-broadcast', () async {
+      // A tap is not a new push. The payload was delivered long ago.
+      final service = build();
+      final received = <PushPayload>[];
+      service.pushes.listen(received.add);
+
+      source.add({
+        PushService.signalKey: 'opened',
+        'id': '018f0000-0000-7000-8000-0000000000b1',
+      });
+      await Future<void>.delayed(Duration.zero);
+
+      expect(observed, hasLength(1));
+      expect(observed.single.state, ReceiptState.opened);
+      expect(observed.single.id, '018f0000-0000-7000-8000-0000000000b1');
+      expect(received, isEmpty, reason: 're-broadcast a tap as a new push');
+    });
+
+    test('a bare signal without an id is dropped quietly', () async {
+      final service = build();
+      final received = <PushPayload>[];
+      service.pushes.listen(received.add);
+
+      source.add({PushService.signalKey: 'opened'});
+      await Future<void>.delayed(Duration.zero);
+
+      expect(observed, isEmpty);
+      expect(received, isEmpty);
+    });
+
+    test('an unknown signal cannot break the push pump', () async {
+      // A newer native layer may tag something this SDK has never heard of.
+      // Dropping the tag is right; dropping the push is not.
+      final service = build();
+      final received = <PushPayload>[];
+      service.pushes.listen(received.add);
+
+      source.add({..._subjectAlert(), PushService.signalKey: 'exploded'});
+      await Future<void>.delayed(Duration.zero);
+
+      expect(received, hasLength(1));
+      expect(observed.single.state, ReceiptState.delivered);
+    });
+
+    test('a non-conformant payload reports nothing', () async {
+      build();
+      source.add({'not': 'a poke-me push'});
+      await Future<void>.delayed(Duration.zero);
+      expect(observed, isEmpty);
+    });
+
+    test('no observer is a working service', () async {
+      final service = PushService(source: source.stream)..start();
+      final received = <PushPayload>[];
+      service.pushes.listen(received.add);
+
+      source.add(_subjectAlert());
+      await Future<void>.delayed(Duration.zero);
+
+      expect(received, hasLength(1));
+    });
+  });
 }

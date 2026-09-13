@@ -226,19 +226,33 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) -> Bool {
-        messageStreamHandler?.send(payload: PokemePlugin.extractPayload(userInfo))
+        messageStreamHandler?.send(
+            payload: PokemePlugin.extractPayload(userInfo, signal: PokemePlugin.signalDelivered))
         completionHandler(.newData)
         return true
     }
 
+    /// What this device observed about a notification, tagged onto every event
+    /// so the Dart side can report a delivery receipt without the host wiring
+    /// anything. Must match `PushService.signalKey` and `ReceiptState`.
+    static let signalKey = "_pokeme_signal"
+    static let signalDelivered = "delivered"
+    static let signalShown = "shown"
+    static let signalOpened = "opened"
+
     /// Flattens the APNs `userInfo` to a Flutter-codec-friendly `[String: Any]`,
-    /// dropping the `aps` envelope so only the publisher's custom keys remain.
-    static func extractPayload(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+    /// dropping the `aps` envelope so only the publisher's custom keys remain,
+    /// and tags it with what was observed.
+    static func extractPayload(
+        _ userInfo: [AnyHashable: Any],
+        signal: String
+    ) -> [String: Any] {
         var payload: [String: Any] = [:]
         for (key, value) in userInfo {
             guard let key = key as? String, key != "aps" else { continue }
             payload[key] = value
         }
+        payload[signalKey] = signal
         return payload
     }
 
@@ -252,9 +266,14 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         // Foreground delivery: forward the payload to Dart, then either let the
         // previously-installed delegate decide presentation (and own the
         // completion handler) or present the banner ourselves.
+        //
+        // Tagged `shown` rather than `delivered`: reaching this delegate means
+        // the OS is about to present it, which is a different fact from its
+        // having arrived.
         messageStreamHandler?.send(
             payload: PokemePlugin.extractPayload(
-                notification.request.content.userInfo))
+                notification.request.content.userInfo,
+                signal: PokemePlugin.signalShown))
 
         if let prev = previousNotificationDelegate,
             prev.responds(
@@ -275,9 +294,20 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        // Tap / action: forward to the previous delegate if it handles it,
-        // otherwise finish. (Payload delivery to Dart happens via the
-        // application-delegate path to avoid double-emitting on tap.)
+        // Tap / action. The payload itself is *not* forwarded here — that
+        // happens via the application-delegate path, and emitting it again
+        // would double-deliver the push to a host that already saw it. What is
+        // forwarded is a bare signal: an id and what happened to it, which the
+        // Dart side reports as a receipt and does not re-broadcast.
+        if let id = response.notification.request.content.userInfo["id"] as? String,
+            !id.isEmpty {
+            messageStreamHandler?.send(payload: [
+                PokemePlugin.signalKey: PokemePlugin.signalOpened,
+                "id": id,
+            ])
+        }
+
+        // Forward to the previous delegate if it handles it, otherwise finish.
         if let prev = previousNotificationDelegate,
             prev.responds(
                 to: #selector(UNUserNotificationCenterDelegate

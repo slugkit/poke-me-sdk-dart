@@ -1,3 +1,47 @@
+## 0.6.0
+
+* **Delivery receipts** — the SDK now tells poke-me what became of each
+  notification. Nothing else can: APNs and Web Push have no receipts, and FCM's
+  live in the publisher's own Firebase project. On by default; pass
+  `PokeMe.init(reportReceipts: false)` to send none.
+
+  Three states, reported **independently** rather than as a progression —
+  `delivered` (the push arrived and the SDK ran), `shown` (the OS displayed it),
+  `opened` (the user tapped it). A silent push is delivered and never anything
+  else; a coalesced one may never be shown; a tap that cold-starts the app can
+  produce `opened` with no `shown` before it.
+
+  Automatic on every platform the OS makes it possible on:
+  - **iOS** — `delivered` from the application delegate, `shown` from
+    `willPresent`, `opened` from `didReceive`. The tap forwards a *bare* signal
+    (an id, no envelope), so a host that already saw the push does not see it
+    twice — the no-double-emit property of v0.5.x is unchanged.
+  - **macOS** — the same three, all as full payloads, which is what the macOS
+    delegate already forwarded. `pushes` is unchanged.
+  - **Android** — `delivered` from the messaging service, `shown` when the SDK
+    actually posts a notification (not when `POST_NOTIFICATIONS` is denied and
+    `notify` is a silent no-op), `opened` from the launch/new intent. A tap that
+    cold-starts the app is read from the launch intent, which is the tap most
+    worth knowing about.
+
+  For a host that renders its own notifications: `poke.reportShown(id)` and
+  `poke.reportOpened(id)`. Neither throws.
+
+  Reports are buffered, coalesced by a 2s debounce, split at the backend's cap
+  of 64 per request, retried exactly once and then dropped — the endpoint is
+  idempotent per (notification, state), so a retry cannot double-count, and a
+  receipt is not worth a durable queue. The buffer is bounded at 512, dropping
+  oldest-first. Call `poke.flushReceipts()` when the app backgrounds.
+
+  Receipts are a paid poke-me feature. An unentitled plan gets a successful
+  response saying nothing was recorded, and the SDK **stops reporting for the
+  rest of the process** rather than having a fleet of devices retry a billing
+  decision.
+
+  **Not verified on a device.** The Dart layer is unit-tested (27 new tests);
+  the three native paths are analysed and reviewed but, as with v0.5.x, need
+  physical-device verification.
+
 ## 0.5.3
 
 * **Fix `PokeMe.init` throwing `MissingPluginException` on iOS/macOS** (#14).

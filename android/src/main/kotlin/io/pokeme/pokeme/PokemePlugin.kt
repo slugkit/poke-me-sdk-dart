@@ -23,7 +23,8 @@ import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
 
 class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
-    EventChannel.StreamHandler, PluginRegistry.RequestPermissionsResultListener {
+    EventChannel.StreamHandler, PluginRegistry.RequestPermissionsResultListener,
+    PluginRegistry.NewIntentListener {
 
     private lateinit var channel: MethodChannel
     private lateinit var eventChannel: EventChannel
@@ -201,6 +202,25 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
 
     companion object {
         private const val POST_NOTIFICATIONS_REQUEST = 7001
+
+        /// What this device observed about a notification, tagged onto every
+        /// event so the Dart side can report a delivery receipt without the
+        /// host wiring anything. Must match `PushService.signalKey` and
+        /// `ReceiptState`.
+        const val SIGNAL_KEY = "_pokeme_signal"
+        const val SIGNAL_DELIVERED = "delivered"
+        const val SIGNAL_SHOWN = "shown"
+        const val SIGNAL_OPENED = "opened"
+
+        /// Forwards a bare signal: an id and what happened to it, with no
+        /// envelope. Used for things that happened to a notification whose
+        /// payload was already delivered — the OS displayed it, or the user
+        /// tapped it. The Dart side reports these and does not re-broadcast
+        /// them, so a host that already saw the push does not see it twice.
+        fun deliverSignal(notificationId: String?, signal: String) {
+            if (notificationId.isNullOrEmpty()) return
+            deliverMessage(mapOf(SIGNAL_KEY to signal, "id" to notificationId))
+        }
         private val mainHandler = Handler(Looper.getMainLooper())
         private val lock = Any()
         private var messageSink: EventChannel.EventSink? = null
@@ -255,11 +275,36 @@ class PokemePlugin : FlutterPlugin, MethodCallHandler, ActivityAware,
         activityBinding = binding
         activity = binding.activity
         binding.addRequestPermissionsResultListener(this)
+        binding.addOnNewIntentListener(this)
+        // A tap that cold-started the app arrives as the launch intent rather
+        // than through onNewIntent, so it has to be read here or it is missed
+        // entirely — which is the tap most worth knowing about.
+        reportTap(binding.activity.intent)
     }
 
     private fun unbindActivity() {
         activityBinding?.removeRequestPermissionsResultListener(this)
+        activityBinding?.removeOnNewIntentListener(this)
         activityBinding = null
         activity = null
+    }
+
+    /// A tap on a notification the SDK posted, which relaunches the host with
+    /// the payload as `pokeme_*` extras (see [PokemeNotifications]).
+    ///
+    /// The extra is cleared once read: Android hands the same intent back on
+    /// every configuration change, and reporting a tap once per screen rotation
+    /// would be wrong in a way nothing downstream could correct.
+    override fun onNewIntent(intent: Intent): Boolean {
+        reportTap(intent)
+        // Never consume it — the host's own routing reads the same extras.
+        return false
+    }
+
+    private fun reportTap(intent: Intent?) {
+        if (intent == null) return
+        if (!intent.getBooleanExtra("pokeme_tapped", false)) return
+        deliverSignal(intent.getStringExtra("pokeme_id"), SIGNAL_OPENED)
+        intent.removeExtra("pokeme_tapped")
     }
 }

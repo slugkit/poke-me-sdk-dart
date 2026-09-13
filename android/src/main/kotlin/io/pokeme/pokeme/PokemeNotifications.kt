@@ -60,10 +60,18 @@ object PokemeNotifications {
 
         contentIntent(context, payload)?.let { builder.setContentIntent(it) }
 
-        val id = (payload["id"] as? String)?.hashCode() ?: System.currentTimeMillis().toInt()
+        val notificationId = payload["id"] as? String
+        val id = notificationId?.hashCode() ?: System.currentTimeMillis().toInt()
         // No-op if POST_NOTIFICATIONS isn't granted (Android 13+); the plugin
         // requests it during getToken.
-        NotificationManagerCompat.from(context).notify(id, builder.build())
+        val manager = NotificationManagerCompat.from(context)
+        manager.notify(id, builder.build())
+        // Only report `shown` when the OS will actually display it. Without the
+        // permission `notify` is a silent no-op, and a receipt saying the user
+        // saw something they cannot see is worse than no receipt at all.
+        if (manager.areNotificationsEnabled()) {
+            PokemePlugin.deliverSignal(notificationId, PokemePlugin.SIGNAL_SHOWN)
+        }
     }
 
     private fun ensureChannel(context: Context) {
@@ -87,6 +95,11 @@ object PokemeNotifications {
         launch.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         launch.putExtra("pokeme_tapped", true)
         for ((key, value) in payload) {
+            // Underscore-prefixed keys are the SDK's own transport metadata
+            // (the receipt signal), not the publisher's envelope. The host app
+            // routes on these extras; internal bookkeeping has no business
+            // appearing among them.
+            if (key.startsWith("_")) continue
             if (value is String) launch.putExtra("pokeme_$key", value)
         }
         return PendingIntent.getActivity(

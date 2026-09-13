@@ -296,20 +296,41 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         )
     }
 
+    /// What this device observed about a notification, tagged onto every event
+    /// so the Dart side can report a delivery receipt without the host wiring
+    /// anything. Must match `PushService.signalKey` and `ReceiptState`.
+    static let signalKey = "_pokeme_signal"
+    static let signalDelivered = "delivered"
+    static let signalShown = "shown"
+    static let signalOpened = "opened"
+
     /// Called by the AppDelegate for silent / background remote notifications
     /// (which do not pass through the notification centre delegate).
-    public func deliverRemoteNotification(userInfo: [AnyHashable: Any]) {
-        messageStreamHandler?.send(payload: PokemePlugin.extractPayload(userInfo))
+    ///
+    /// [signal] defaults to `delivered`, which is what an arriving notification
+    /// is — and keeps a host AppDelegate that calls this itself compiling
+    /// unchanged.
+    public func deliverRemoteNotification(
+        userInfo: [AnyHashable: Any],
+        signal: String = PokemePlugin.signalDelivered
+    ) {
+        messageStreamHandler?.send(
+            payload: PokemePlugin.extractPayload(userInfo, signal: signal))
     }
 
     /// Flattens the APNs `userInfo` to a Flutter-codec-friendly `[String: Any]`,
-    /// dropping the `aps` envelope so only the publisher's custom keys remain.
-    static func extractPayload(_ userInfo: [AnyHashable: Any]) -> [String: Any] {
+    /// dropping the `aps` envelope so only the publisher's custom keys remain,
+    /// and tags it with what was observed.
+    static func extractPayload(
+        _ userInfo: [AnyHashable: Any],
+        signal: String = PokemePlugin.signalDelivered
+    ) -> [String: Any] {
         var payload: [String: Any] = [:]
         for (key, value) in userInfo {
             guard let key = key as? String, key != "aps" else { continue }
             payload[key] = value
         }
+        payload[signalKey] = signal
         return payload
     }
 
@@ -320,8 +341,12 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        // Always observe the payload …
-        deliverRemoteNotification(userInfo: notification.request.content.userInfo)
+        // Always observe the payload — tagged `shown`, because reaching this
+        // delegate means the OS is about to present it, which is a different
+        // fact from its having arrived …
+        deliverRemoteNotification(
+            userInfo: notification.request.content.userInfo,
+            signal: PokemePlugin.signalShown)
         // … then let the previously-installed delegate decide presentation (and
         // own the completion handler); only present ourselves if there is none.
         if let prev = previousNotificationDelegate,
@@ -341,7 +366,12 @@ public class PokemePlugin: NSObject, FlutterPlugin, UNUserNotificationCenterDele
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        deliverRemoteNotification(userInfo: response.notification.request.content.userInfo)
+        // A tap. macOS forwards the whole payload here (unlike iOS, where the
+        // application-delegate path already did) — keep doing so, tagged
+        // `opened`.
+        deliverRemoteNotification(
+            userInfo: response.notification.request.content.userInfo,
+            signal: PokemePlugin.signalOpened)
         if let prev = previousNotificationDelegate,
             prev.responds(
                 to: #selector(UNUserNotificationCenterDelegate
